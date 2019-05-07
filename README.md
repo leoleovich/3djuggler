@@ -1,11 +1,11 @@
 You will need to implement internal website API, which supports following:
 * /job. Depending on a POST params it should:
-** Give a new job
-** Give details about job
-** Update job status
-* /printer. Depending on a POST params it should:
-** Refresh printer healthcheck
-** Reschedule jobs
+  * Give a new job
+  * Give details about job
+  * Update job status
+* /printer. Depending on a POST params it should:  
+  * Refresh printer healthcheck
+  * Reschedule jobs
 
 Every API call must send Username (app) and Password (token) as POST params
 
