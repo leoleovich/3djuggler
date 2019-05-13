@@ -147,7 +147,7 @@ func main() {
 				os.Remove(daemon.gizmostatusfile)
 
 				// Device reads it for status
-				emptyFile, err := os.Create(daemon.gizmostatusfile)
+				emptyFile, err := os.OpenFile(daemon.gizmostatusfile, os.O_CREATE, 0666)
 				if err != nil {
 					log.Error("Unable to create gizmostatusfile: ", err)
 				}
