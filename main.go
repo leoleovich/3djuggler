@@ -147,11 +147,15 @@ func main() {
 				os.Remove(daemon.gizmostatusfile)
 
 				// Device reads it for status
-				emptyFile, err := os.OpenFile(daemon.gizmostatusfile, os.O_CREATE, 0666)
+				emptyFile, err := os.Create(daemon.gizmostatusfile)
 				if err != nil {
 					log.Error("Unable to create gizmostatusfile: ", err)
 				}
 				emptyFile.Close()
+				err = os.Chmod(daemon.gizmostatusfile, 0666)
+				if err != nil {
+					log.Error("Unable to chmod gizmostatusfile: ", err)
+				}
 
 				log.Info("The job successfully marked as ", daemon.job.Status)
 				fallthrough
