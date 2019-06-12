@@ -31,7 +31,7 @@ type Job struct {
 	FileContent  string `json:"file_content"`
 	Owner        string
 	Status       string
-	progress     float64
+	Progress     float64
 	feederStatus gcodefeeder.Status
 }
 
@@ -47,17 +47,6 @@ type InternEnpoint struct {
 
 type Config struct {
 	InternEnpoint *InternEnpoint
-}
-
-type Daemon struct {
-	timer      *time.Timer
-	config     *Config
-	buttonfile string
-	// gizmostatusfile is used to communicate with the device daemon is running on
-	gizmostatusfile string
-	jobfile         string
-	job             *Job
-	feeder          *gcodefeeder.Feeder
 }
 
 func main() {
@@ -105,6 +94,11 @@ func main() {
 		panic(fmt.Sprintf("Can't decode main config: %v", err))
 	}
 	jsonFile.Close()
+
+	http.HandleFunc("/info", daemon.InfoHandler)
+	go func() { log.Fatal(http.ListenAndServe("[::1]:8080", nil)) }()
+	log.Debug("Started http server on [::1]:8080")
+
 	daemon.buttonfile = buttonfile
 	daemon.gizmostatusfile = gizmostatusfile
 	daemon.jobfile = jobfile
@@ -138,8 +132,12 @@ func main() {
 					break
 				}
 				daemon.job.Id = ie.job.Id
+				daemon.job.Filename = ie.job.Filename
 				daemon.job.FileContent = ie.job.FileContent
 				daemon.job.Status = "Waiting for a button"
+				daemon.job.Progress = ie.job.Progress
+				daemon.job.Owner = ie.job.Owner
+
 				if err = ie.reportJobStatusChange(daemon.job); err != nil {
 					log.Error("Can't report it to intern: ", err)
 				}
@@ -255,7 +253,7 @@ func main() {
 					daemon.feeder.Cancel()
 					break
 				}
-				daemon.job.progress = float64(daemon.feeder.Progress())
+				daemon.job.Progress = float64(daemon.feeder.Progress())
 				daemon.job.feederStatus = daemon.feeder.Status()
 				switch daemon.job.feederStatus {
 				case gcodefeeder.Finished:
@@ -286,25 +284,12 @@ func main() {
 	}
 }
 
-func (daemon *Daemon) checkButtonPressed() bool {
-	defer os.Remove(daemon.buttonfile)
-	s, err := os.Stat(daemon.buttonfile)
-	if err != nil {
-		return false
-	}
-
-	if s.ModTime().Add(waitingForButtonInterval).After(time.Now()) {
-		return true
-	}
-	return false
-}
-
 func (ie *InternEnpoint) reportJobStatusChange(job *Job) error {
 	statusWithProgress := job.Status
 	if job.Status == "Printing" {
 		switch job.feederStatus {
 		case gcodefeeder.Printing:
-			sofar := job.progress
+			sofar := job.Progress
 			statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
 		case gcodefeeder.MMUFail:
 			statusWithProgress = fmt.Sprintf("Printing paused: MMU needs attention")
