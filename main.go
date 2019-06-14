@@ -291,10 +291,10 @@ func (ie *InternEnpoint) reportJobStatusChange(job *Job) error {
 		case gcodefeeder.Printing:
 			sofar := job.Progress
 			statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
-		case gcodefeeder.MMUFail:
-			statusWithProgress = fmt.Sprintf("Printing paused: MMU needs attention")
+		case gcodefeeder.MMUBusy:
+			statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
 		case gcodefeeder.FSensorBusy:
-			statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor measurement")
+			statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
 		}
 	}
 
