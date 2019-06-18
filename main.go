@@ -46,6 +46,7 @@ type InternEnpoint struct {
 }
 
 type Config struct {
+	Listen        string
 	InternEnpoint *InternEnpoint
 }
 
@@ -95,9 +96,12 @@ func main() {
 	}
 	jsonFile.Close()
 
+	if daemon.config.Listen == "" {
+		daemon.config.Listen = "[::1]:8888"
+	}
 	http.HandleFunc("/info", daemon.InfoHandler)
-	go func() { log.Fatal(http.ListenAndServe("[::1]:8080", nil)) }()
-	log.Debug("Started http server on [::1]:8080")
+	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
+	log.Debug("Started http server on ", daemon.config.Listen)
 
 	daemon.buttonfile = buttonfile
 	daemon.gizmostatusfile = gizmostatusfile
