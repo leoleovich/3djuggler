@@ -26,12 +26,12 @@ var (
 )
 
 type Job struct {
-	Id           int
-	Filename     string `json:"file_name"`
-	FileContent  string `json:"file_content"`
-	Owner        string
-	Status       string
-	Progress     float64
+	Id           int     `json:"id"`
+	Filename     string  `json:"file_name"`
+	FileContent  string  `json:"file_content"`
+	Owner        string  `json:"owner"`
+	Status       string  `json:"status"`
+	Progress     float64 `json:"progress"`
 	feederStatus gcodefeeder.Status
 }
 
