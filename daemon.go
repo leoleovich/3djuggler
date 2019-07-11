@@ -36,6 +36,12 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add headers to allow AJAX
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+	w.Header().Set("Content-Type", "text/json")
+
 	fmt.Fprintf(w, string(b))
 }
 
