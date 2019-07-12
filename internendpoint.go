@@ -102,6 +102,9 @@ func (ie *InternEnpoint) getJob(id int) error {
 	if err != nil {
 		return err
 	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("bad response status from intern endpoint: %d", resp.StatusCode)
+	}
 
 	f, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
