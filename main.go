@@ -240,6 +240,8 @@ func main() {
 					daemon.UpdateStatus("Finished")
 				case gcodefeeder.Error:
 					daemon.UpdateStatus("Cancelling")
+				default:
+					daemon.UpdateStatus(daemon.job.Status)
 				}
 
 			case "Cancelling":
