@@ -102,6 +102,7 @@ func (ie *InternEnpoint) getJob(id int) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad response status from intern endpoint: %d", resp.StatusCode)
 	}
@@ -110,7 +111,6 @@ func (ie *InternEnpoint) getJob(id int) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	var result struct {
 		Success bool
