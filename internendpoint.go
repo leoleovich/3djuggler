@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 )
@@ -106,19 +105,13 @@ func (ie *InternEnpoint) getJob(id int) error {
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad response status from intern endpoint: %d", resp.StatusCode)
 	}
-
-	f, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
+	dec := json.NewDecoder(resp.Body)
 	var result struct {
 		Success bool
 		Content *Job
 		Error   string
 	}
-
-	err = json.Unmarshal(f, &result)
+	err = dec.Decode(&result)
 	if err != nil {
 		return err
 	}
