@@ -23,12 +23,13 @@ var (
 )
 
 type Job struct {
-	Id           int     `json:"id"`
-	Filename     string  `json:"file_name"`
-	FileContent  string  `json:"file_content"`
-	Owner        string  `json:"owner"`
-	Status       string  `json:"status"`
-	Progress     float64 `json:"progress"`
+	Id           int       `json:"id"`
+	Filename     string    `json:"file_name"`
+	FileContent  string    `json:"file_content"`
+	Owner        string    `json:"owner"`
+	Status       string    `json:"status"`
+	Progress     float64   `json:"progress"`
+	Scheduled    time.Time `json:"scheduled"`
 	feederStatus gcodefeeder.Status
 }
 
@@ -98,6 +99,8 @@ func main() {
 	}
 	http.HandleFunc("/info", daemon.InfoHandler)
 	http.HandleFunc("/start", daemon.StartHandler)
+	http.HandleFunc("/reschedule", daemon.RescheduleHandler)
+	http.HandleFunc("/cancel", daemon.CancelHandler)
 	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
 	log.Debug("Started http server on ", daemon.config.Listen)
 
@@ -138,13 +141,13 @@ func main() {
 				daemon.job.FileContent = daemon.ie.job.FileContent
 				daemon.job.Progress = daemon.ie.job.Progress
 				daemon.job.Owner = daemon.ie.job.Owner
+				daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
 
-				daemon.UpdateStatus("Waiting for a button")
-
+				// Device reads it for status
+				// TODO: delete after migration
 				os.Remove(daemon.buttonfile)
 				os.Remove(daemon.gizmostatusfile)
 
-				// Device reads it for status
 				emptyFile, err := os.Create(daemon.gizmostatusfile)
 				if err != nil {
 					log.Error("Unable to create gizmostatusfile: ", err)
@@ -155,7 +158,7 @@ func main() {
 					log.Error("Unable to chmod gizmostatusfile: ", err)
 				}
 
-				log.Info("The job successfully marked as ", daemon.job.Status)
+				daemon.UpdateStatus("Waiting for a button")
 				fallthrough
 
 			case "Waiting for a button":
@@ -171,6 +174,8 @@ func main() {
 					daemon.UpdateStatus("Cancelling")
 					break
 				}
+
+				// TODO: delete after migration
 				gizmostatusfileStat, err := os.Stat(daemon.gizmostatusfile)
 				if err != nil {
 					log.Info("Job was canceled through device, canceling")
@@ -181,6 +186,8 @@ func main() {
 					} else {
 						log.Info("Waiting ", gizmostatusfileStat.ModTime().Add(waitingForButtonInterval).Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 					}
+				} else if daemon.job.Scheduled.After(time.Now()) {
+					log.Info("Waiting ", daemon.job.Scheduled.Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 				} else {
 					log.Warning("Nobody pressed the button on time")
 					daemon.UpdateStatus("Button timeout")
