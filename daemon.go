@@ -96,6 +96,7 @@ func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	daemon.job.Fetched = time.Now()
 	daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
 	// Delete after migration
 	// touch file
