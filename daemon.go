@@ -45,10 +45,12 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/json")
 
 	job := &Job{
+		Id:        daemon.job.Id,
 		Owner:     daemon.job.Owner,
 		Filename:  daemon.job.Filename,
 		Progress:  daemon.job.Progress,
 		Status:    daemon.job.Status,
+		Fetched:   daemon.job.Fetched,
 		Scheduled: daemon.job.Scheduled,
 	}
 	b, err := json.Marshal(job)

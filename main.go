@@ -29,6 +29,7 @@ type Job struct {
 	Owner        string    `json:"owner"`
 	Status       string    `json:"status"`
 	Progress     float64   `json:"progress"`
+	Fetched      time.Time `json:"fetched"`
 	Scheduled    time.Time `json:"scheduled"`
 	feederStatus gcodefeeder.Status
 }
@@ -141,6 +142,7 @@ func main() {
 				daemon.job.FileContent = daemon.ie.job.FileContent
 				daemon.job.Progress = daemon.ie.job.Progress
 				daemon.job.Owner = daemon.ie.job.Owner
+				daemon.job.Fetched = time.Now()
 				daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
 
 				// Device reads it for status
