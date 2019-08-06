@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/leoleovich/3djuggler/juggler"
 	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
@@ -22,23 +23,11 @@ var (
 	pollingInterval          = time.Duration(15 * time.Second)
 )
 
-type Job struct {
-	Id           int       `json:"id"`
-	Filename     string    `json:"file_name"`
-	FileContent  string    `json:"file_content"`
-	Owner        string    `json:"owner"`
-	Status       string    `json:"status"`
-	Progress     float64   `json:"progress"`
-	Fetched      time.Time `json:"fetched"`
-	Scheduled    time.Time `json:"scheduled"`
-	feederStatus gcodefeeder.Status
-}
-
 type InternEnpoint struct {
 	Api_app     string
 	Api_key     string
 	Api_uri     string
-	job         *Job
+	job         *juggler.Job
 	PrinterName string
 	OfficeName  string
 	log         *log.Logger
@@ -78,7 +67,7 @@ func main() {
 	daemon := &Daemon{
 		timer:  time.NewTimer(0),
 		config: &Config{},
-		job:    &Job{Status: "Waiting for job"},
+		job:    &juggler.Job{Status: juggler.StatusWaitingJob},
 	}
 
 	jsonFile, err := os.Open(configFile)
@@ -116,7 +105,7 @@ func main() {
 
 		PrinterName: daemon.config.InternEnpoint.PrinterName,
 		OfficeName:  daemon.config.InternEnpoint.OfficeName,
-		job:         &Job{},
+		job:         &juggler.Job{},
 	}
 
 	if err := daemon.ie.reschedule(); err != nil {
@@ -132,7 +121,7 @@ func main() {
 			log.Info("My status is: ", daemon.job.Status)
 
 			switch daemon.job.Status {
-			case "Waiting for job":
+			case juggler.StatusWaitingJob:
 				if err = daemon.ie.nextJob(); err != nil {
 					log.Error(err)
 					break
@@ -160,10 +149,10 @@ func main() {
 					log.Error("Unable to chmod gizmostatusfile: ", err)
 				}
 
-				daemon.UpdateStatus("Waiting for a button")
+				daemon.UpdateStatus(juggler.StatusWaitingButton)
 				fallthrough
 
-			case "Waiting for a button":
+			case juggler.StatusWaitingButton:
 				log.Info("Job ", daemon.job.Id, " is waiting")
 				err = daemon.ie.getJob(daemon.job.Id)
 				if err != nil {
@@ -171,9 +160,9 @@ func main() {
 				} else {
 					log.Info("Job status on intern: ", daemon.ie.job.Status)
 				}
-				if err == nil && daemon.ie.job.Status == "Cancelling" {
+				if err == nil && daemon.ie.job.Status == juggler.StatusCancelling {
 					log.Info("The job is cancelling")
-					daemon.UpdateStatus("Cancelling")
+					daemon.UpdateStatus(juggler.StatusCancelling)
 					break
 				}
 
@@ -181,10 +170,10 @@ func main() {
 				gizmostatusfileStat, err := os.Stat(daemon.gizmostatusfile)
 				if err != nil {
 					log.Info("Job was canceled through device, canceling")
-					daemon.UpdateStatus("Cancelling")
+					daemon.UpdateStatus(juggler.StatusCancelling)
 				} else if gizmostatusfileStat.ModTime().Add(waitingForButtonInterval).After(time.Now()) {
 					if daemon.checkButtonPressed() {
-						daemon.UpdateStatus("Sending to printer")
+						daemon.UpdateStatus(juggler.StatusSending)
 					} else {
 						log.Info("Waiting ", gizmostatusfileStat.ModTime().Add(waitingForButtonInterval).Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 					}
@@ -192,14 +181,14 @@ func main() {
 					log.Info("Waiting ", daemon.job.Scheduled.Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 				} else {
 					log.Warning("Nobody pressed the button on time")
-					daemon.UpdateStatus("Button timeout")
+					daemon.UpdateStatus(juggler.StatusButtonTimeout)
 					log.Warning("Timeout while waiting for a job. Switching back to ", daemon.job.Status)
-					daemon.UpdateStatus("Waiting for job")
+					daemon.UpdateStatus(juggler.StatusWaitingJob)
 					daemon.job.Id = 0
 					os.Remove(daemon.gizmostatusfile)
 				}
 
-			case "Sending to printer":
+			case juggler.StatusSending:
 				log.Info("Sending to printer")
 
 				log.Debug("FileSize: ", len(daemon.job.FileContent))
@@ -217,18 +206,18 @@ func main() {
 					log.Error("Failed to create Feeder: ", err)
 					break
 				}
-				daemon.UpdateStatus("Printing")
+				daemon.UpdateStatus(juggler.StatusPrinting)
 
 				go daemon.feeder.Feed()
 
-			case "Printing":
+			case juggler.StatusPrinting:
 				log.Info("Job ", daemon.job.Id, " is currently in progress")
 
 				// Check if status file does not exist (removed through device)
 				if _, err := os.Stat(daemon.gizmostatusfile); os.IsNotExist(err) {
 					log.Warning("Was canceled through device. Canceling")
 					daemon.feeder.Cancel()
-					daemon.UpdateStatus("Cancelling")
+					daemon.UpdateStatus(juggler.StatusCancelling)
 					break
 				}
 
@@ -236,33 +225,33 @@ func main() {
 				if err != nil {
 					log.Error("Can't report status to intern: ", err)
 				}
-				if err == nil && daemon.ie.job.Status == "Cancelling" {
+				if err == nil && daemon.ie.job.Status == juggler.StatusCancelling {
 					log.Info("Cancelling the job")
-					daemon.UpdateStatus("Cancelling")
+					daemon.UpdateStatus(juggler.StatusCancelling)
 					daemon.feeder.Cancel()
 					break
 				}
 				daemon.job.Progress = float64(daemon.feeder.Progress())
-				daemon.job.feederStatus = daemon.feeder.Status()
-				switch daemon.job.feederStatus {
+				daemon.job.FeederStatus = daemon.feeder.Status()
+				switch daemon.job.FeederStatus {
 				case gcodefeeder.Finished:
-					daemon.UpdateStatus("Finished")
+					daemon.UpdateStatus(juggler.StatusFinished)
 				case gcodefeeder.Error:
-					daemon.UpdateStatus("Cancelling")
+					daemon.UpdateStatus(juggler.StatusCancelling)
 				default:
 					daemon.UpdateStatus(daemon.job.Status)
 				}
 
-			case "Cancelling":
+			case juggler.StatusCancelling:
 				fallthrough
-			case "Finished":
+			case juggler.StatusFinished:
 				log.Info("Deleting from intern")
 				err = daemon.ie.deleteJob(daemon.job)
 				if err != nil {
 					log.Error(err)
 				}
 				daemon.job.Id = 0
-				daemon.UpdateStatus("Waiting for job")
+				daemon.UpdateStatus(juggler.StatusWaitingJob)
 
 				// Marking device as free
 				os.Remove(daemon.gizmostatusfile)

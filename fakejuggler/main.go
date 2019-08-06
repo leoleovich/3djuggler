@@ -1,0 +1,153 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/leoleovich/3djuggler/juggler"
+	"net/http"
+)
+
+func usage() {
+	fmt.Println(`
+p: progress job by 10%
+s: start job
+f: finish the job
+w: waiting for job
+b: waiting for a button`)
+}
+
+type FakeJuggler struct {
+	Job *juggler.Job
+}
+
+func (j *FakeJuggler) start() {
+
+	switch j.Job.Status {
+	case juggler.StatusSending:
+		log.Println("Asked to start when already printing")
+	case juggler.StatusPrinting:
+		log.Println("Asked to start when already printing")
+	case juggler.StatusCancelling:
+		log.Println("Asked to start when cancelling")
+	case juggler.StatusFinished:
+		log.Println("Asked to start when finished")
+	}
+	j.Job.Progress = 0
+	j.Job.Status = juggler.StatusPrinting
+}
+func (j *FakeJuggler) cancel() {
+
+	switch j.Job.Status {
+	case juggler.StatusWaitingJob:
+		log.Println("Asked to cancel when waiting for job")
+	case juggler.StatusWaitingButton:
+		log.Println("Asked to cancel when waiting for button")
+	case juggler.StatusFinished:
+		log.Println("Asked to cancel when finished")
+	}
+	j.Job.Status = juggler.StatusCancelling
+}
+
+func (j *FakeJuggler) finish() {
+	j.Job.Status = juggler.StatusFinished
+}
+
+func (j *FakeJuggler) reschedule() {
+	j.Job.Fetched = time.Now()
+	j.Job.Scheduled = time.Now().Add(600 * time.Second)
+}
+
+func (j *FakeJuggler) waitForButton() {
+	j.Job.Progress = 0
+	j.Job.Id = 10
+	j.Job.Status = juggler.StatusWaitingButton
+	j.Job.Fetched = time.Now()
+	j.Job.Scheduled = time.Now().Add(600 * time.Second)
+}
+
+func (j *FakeJuggler) waitForJob() {
+	j.Job.Progress = 0
+	j.Job.Id = 0
+	j.Job.Status = juggler.StatusWaitingJob
+}
+
+func (j *FakeJuggler) progress() {
+	j.Job.Status = juggler.StatusPrinting
+	next := j.Job.Progress + 10.0
+	if next > 100 {
+		next = 100.0
+		j.Job.Status = juggler.StatusFinished
+	}
+	j.Job.Progress = next
+	log.Printf("Updated progress to %.1f%%", next)
+}
+
+func main() {
+	job := juggler.Job{
+		Status:   juggler.StatusWaitingJob,
+		Owner:    "user",
+		Filename: "some_file.gcode",
+	}
+	j := FakeJuggler{Job: &job}
+
+	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		log.Println("cancel")
+		j.cancel()
+	})
+
+	http.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		log.Println("start")
+		j.start()
+	})
+
+	http.HandleFunc("/reschedule", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		log.Println("reschedule")
+		j.reschedule()
+	})
+
+	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		b, err := json.Marshal(j.Job)
+		if err != nil {
+			panic(err)
+		}
+		w.Write(b)
+	})
+
+	go http.ListenAndServe(":8888", nil)
+
+	reader := bufio.NewReader(os.Stdin)
+	usage()
+	fmt.Printf("Current status: '%s'\n", j.Job.Status)
+
+	for {
+		input, _ := reader.ReadString('\n')
+		c := strings.TrimSpace(input)
+		switch c {
+		case "p":
+			j.progress()
+		case "w":
+			j.waitForJob()
+		case "b":
+			j.waitForButton()
+		case "s":
+			j.start()
+		case "f":
+			j.finish()
+		default:
+			usage()
+		}
+		fmt.Printf("New status: '%s'\n", j.Job.Status)
+
+	}
+
+}

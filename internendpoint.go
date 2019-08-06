@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/leoleovich/3djuggler/juggler"
 	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
 	"net/http"
 	"net/url"
 )
 
-func (ie *InternEnpoint) reportJobStatusChange(job *Job) error {
-	statusWithProgress := job.Status
-	if job.Status == "Printing" {
-		switch job.feederStatus {
+func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
+	statusWithProgress := string(job.Status)
+	if job.Status == juggler.StatusPrinting {
+		switch job.FeederStatus {
 		case gcodefeeder.Printing:
 			sofar := job.Progress
 			statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
@@ -61,7 +62,7 @@ func (ie *InternEnpoint) reschedule() error {
 	return nil
 }
 
-func (ie *InternEnpoint) deleteJob(job *Job) error {
+func (ie *InternEnpoint) deleteJob(job *juggler.Job) error {
 	data := url.Values{}
 	data.Set("app", ie.Api_app)
 	data.Add("token", ie.Api_key)
@@ -108,7 +109,7 @@ func (ie *InternEnpoint) getJob(id int) error {
 	dec := json.NewDecoder(resp.Body)
 	var result struct {
 		Success bool
-		Content *Job
+		Content *juggler.Job
 		Error   string
 	}
 	err = dec.Decode(&result)
