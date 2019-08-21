@@ -11,12 +11,12 @@ import (
 )
 
 type Daemon struct {
-	timer      *time.Timer
-	config     *Config
-	jobfile         string
-	job             *juggler.Job
-	ie              *InternEnpoint
-	feeder          *gcodefeeder.Feeder
+	timer   *time.Timer
+	config  *Config
+	jobfile string
+	job     *juggler.Job
+	ie      *InternEnpoint
+	feeder  *gcodefeeder.Feeder
 }
 
 func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
@@ -38,7 +38,17 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	b, err := json.Marshal(daemon.job)
+	job := &juggler.Job{
+		Id:        daemon.job.Id,
+		Owner:     daemon.job.Owner,
+		Filename:  daemon.job.Filename,
+		Progress:  daemon.job.Progress,
+		Status:    daemon.job.Status,
+		Fetched:   daemon.job.Fetched,
+		Scheduled: daemon.job.Scheduled,
+	}
+
+	b, err := json.Marshal(job)
 	if err != nil {
 		log.Errorf("Failed to respond on /info request: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

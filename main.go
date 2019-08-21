@@ -205,7 +205,11 @@ func main() {
 				fallthrough
 			case juggler.StatusFinished:
 				log.Info("Stopping feeder")
-				daemon.feeder.Cancel()
+				if daemon.feeder != nil {
+					daemon.feeder.Cancel()
+				}
+				daemon.feeder = nil
+
 				log.Info("Deleting from intern")
 				err = daemon.ie.deleteJob(daemon.job)
 				if err != nil {

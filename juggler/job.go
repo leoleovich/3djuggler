@@ -21,7 +21,7 @@ const (
 type Job struct {
 	Id           int                `json:"id"`
 	Filename     string             `json:"file_name"`
-	FileContent  string             `json:"-"`
+	FileContent  string             `json:"file_content"`
 	Owner        string             `json:"owner"`
 	Status       JobStatus          `json:"status"`
 	Progress     float64            `json:"progress"`
