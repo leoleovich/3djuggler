@@ -7,16 +7,12 @@ import (
 	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
 	log "github.com/sirupsen/logrus"
 	"net/http"
-	"os"
 	"time"
 )
 
 type Daemon struct {
 	timer      *time.Timer
 	config     *Config
-	buttonfile string
-	// gizmostatusfile is used to communicate with the device daemon is running on
-	gizmostatusfile string
 	jobfile         string
 	job             *juggler.Job
 	ie              *InternEnpoint
@@ -80,9 +76,6 @@ func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, r *http.Request) 
 
 	daemon.job.Fetched = time.Now()
 	daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
-	// Delete after migration
-	// touch file
-	os.Create(daemon.gizmostatusfile)
 }
 
 // CancelHandler cancels job execution
@@ -97,28 +90,6 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete after migration
-	os.Remove(daemon.gizmostatusfile)
-
 	daemon.job.Scheduled = time.Time{}
 	daemon.UpdateStatus(juggler.StatusCancelling)
-}
-
-func (daemon *Daemon) checkButtonPressed() bool {
-	if daemon.job.Status == juggler.StatusSending {
-		return true
-	}
-
-	// TODO: delete after migration
-	// Keep file handler for the migration period
-	defer os.Remove(daemon.buttonfile)
-	s, err := os.Stat(daemon.buttonfile)
-	if err != nil {
-		return false
-	}
-
-	if s.ModTime().Add(waitingForButtonInterval).After(time.Now()) {
-		return true
-	}
-	return false
 }

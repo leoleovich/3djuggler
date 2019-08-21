@@ -16,8 +16,6 @@ import (
 
 var (
 	octoFilename             = "3djuggler.gcode"
-	buttonfile               = "/tmp/buttonpress"
-	gizmostatusfile          = "/tmp/gizmostatusfile"
 	jobfile                  = "/tmp/job"
 	waitingForButtonInterval = time.Duration(10 * time.Minute)
 	pollingInterval          = time.Duration(15 * time.Second)
@@ -94,8 +92,6 @@ func main() {
 	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
 	log.Debug("Started http server on ", daemon.config.Listen)
 
-	daemon.buttonfile = buttonfile
-	daemon.gizmostatusfile = gizmostatusfile
 	daemon.jobfile = jobfile
 
 	daemon.ie = &InternEnpoint{
@@ -134,21 +130,6 @@ func main() {
 				daemon.job.Fetched = time.Now()
 				daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
 
-				// Device reads it for status
-				// TODO: delete after migration
-				os.Remove(daemon.buttonfile)
-				os.Remove(daemon.gizmostatusfile)
-
-				emptyFile, err := os.Create(daemon.gizmostatusfile)
-				if err != nil {
-					log.Error("Unable to create gizmostatusfile: ", err)
-				}
-				emptyFile.Close()
-				err = os.Chmod(daemon.gizmostatusfile, 0666)
-				if err != nil {
-					log.Error("Unable to chmod gizmostatusfile: ", err)
-				}
-
 				daemon.UpdateStatus(juggler.StatusWaitingButton)
 				fallthrough
 
@@ -166,18 +147,7 @@ func main() {
 					break
 				}
 
-				// TODO: delete after migration
-				gizmostatusfileStat, err := os.Stat(daemon.gizmostatusfile)
-				if err != nil {
-					log.Info("Job was canceled through device, canceling")
-					daemon.UpdateStatus(juggler.StatusCancelling)
-				} else if gizmostatusfileStat.ModTime().Add(waitingForButtonInterval).After(time.Now()) {
-					if daemon.checkButtonPressed() {
-						daemon.UpdateStatus(juggler.StatusSending)
-					} else {
-						log.Info("Waiting ", gizmostatusfileStat.ModTime().Add(waitingForButtonInterval).Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
-					}
-				} else if daemon.job.Scheduled.After(time.Now()) {
+				if daemon.job.Scheduled.After(time.Now()) {
 					log.Info("Waiting ", daemon.job.Scheduled.Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 				} else {
 					log.Warning("Nobody pressed the button on time")
@@ -185,7 +155,6 @@ func main() {
 					log.Warning("Timeout while waiting for a job. Switching back to ", daemon.job.Status)
 					daemon.UpdateStatus(juggler.StatusWaitingJob)
 					daemon.job.Id = 0
-					os.Remove(daemon.gizmostatusfile)
 				}
 
 			case juggler.StatusSending:
@@ -212,15 +181,6 @@ func main() {
 
 			case juggler.StatusPrinting:
 				log.Info("Job ", daemon.job.Id, " is currently in progress")
-
-				// Check if status file does not exist (removed through device)
-				if _, err := os.Stat(daemon.gizmostatusfile); os.IsNotExist(err) {
-					log.Warning("Was canceled through device. Canceling")
-					daemon.feeder.Cancel()
-					daemon.UpdateStatus(juggler.StatusCancelling)
-					break
-				}
-
 				err = daemon.ie.getJob(daemon.job.Id)
 				if err != nil {
 					log.Error("Can't report status to intern: ", err)
@@ -228,7 +188,6 @@ func main() {
 				if err == nil && daemon.ie.job.Status == juggler.StatusCancelling {
 					log.Info("Cancelling the job")
 					daemon.UpdateStatus(juggler.StatusCancelling)
-					daemon.feeder.Cancel()
 					break
 				}
 				daemon.job.Progress = float64(daemon.feeder.Progress())
@@ -245,6 +204,8 @@ func main() {
 			case juggler.StatusCancelling:
 				fallthrough
 			case juggler.StatusFinished:
+				log.Info("Stopping feeder")
+				daemon.feeder.Cancel()
 				log.Info("Deleting from intern")
 				err = daemon.ie.deleteJob(daemon.job)
 				if err != nil {
@@ -252,9 +213,6 @@ func main() {
 				}
 				daemon.job.Id = 0
 				daemon.UpdateStatus(juggler.StatusWaitingJob)
-
-				// Marking device as free
-				os.Remove(daemon.gizmostatusfile)
 			default:
 				log.Error("Job ", daemon.job, " is in a weird state")
 			}
