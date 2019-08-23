@@ -135,7 +135,6 @@ func (f *Feeder) read(ctx context.Context) {
 
 			log.Debug("READING:", bufStr)
 			if strings.HasPrefix(bufStr, "ok") && seenStart {
-				f.status = Printing
 				f.printerAck <- true
 			} else if strings.Contains(bufStr, "fsensor") {
 				f.status = FSensorBusy
@@ -221,12 +220,12 @@ func (f *Feeder) Feed() error {
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		line := scanner.Text()
 		for ;f.status == Paused; {
 			time.Sleep(5 * time.Second)
 			log.Info("Feeder is paused")
 		}
-
-		line := scanner.Text()
+		f.status = Printing
 		err = f.write(ctx, line)
 		if err != nil {
 			f.status = Error
