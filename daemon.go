@@ -121,6 +121,5 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	daemon.job.Scheduled = time.Time{}
-	daemon.UpdateStatus(juggler.StatusCancelling)
+	daemon.feeder.Pause()
 }
