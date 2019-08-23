@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/leoleovich/3djuggler/juggler"
-	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
+	"github.com/leoleovich/3djuggler/gcodefeeder"
 	"net/http"
 	"net/url"
 )

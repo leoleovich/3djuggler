@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/leoleovich/3djuggler/juggler"
-	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
+	"github.com/leoleovich/3djuggler/gcodefeeder"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"

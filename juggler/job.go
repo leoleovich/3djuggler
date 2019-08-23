@@ -3,7 +3,7 @@ package juggler
 import (
 	"time"
 
-	"github.com/leoleovich/go-gcodefeeder/gcodefeeder"
+	"github.com/leoleovich/3djuggler/gcodefeeder"
 )
 
 type JobStatus string
