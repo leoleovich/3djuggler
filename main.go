@@ -87,6 +87,7 @@ func main() {
 	}
 	http.HandleFunc("/info", daemon.InfoHandler)
 	http.HandleFunc("/start", daemon.StartHandler)
+	http.HandleFunc("/pause", daemon.PauseHandler)
 	http.HandleFunc("/reschedule", daemon.RescheduleHandler)
 	http.HandleFunc("/cancel", daemon.CancelHandler)
 	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
