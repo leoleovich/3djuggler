@@ -22,6 +22,8 @@ func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 			statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
 		case gcodefeeder.FSensorBusy:
 			statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
+		case gcodefeeder.Paused:
+			statusWithProgress = fmt.Sprintf("Printing paused manually")
 		}
 	}
 

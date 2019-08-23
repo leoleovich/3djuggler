@@ -62,14 +62,19 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	if daemon.job.Status != juggler.StatusWaitingButton {
-		errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.job.Status)
-		log.Infof(errS)
-		http.Error(w, errS, http.StatusBadRequest)
+	if daemon.job.Status == juggler.StatusWaitingButton {
+		// Initial start
+		daemon.UpdateStatus(juggler.StatusSending)
+		return
+	} else if daemon.job.Status == juggler.StatusPrinting {
+		// Unpause
+		daemon.feeder.Start()
 		return
 	}
 
-	daemon.UpdateStatus(juggler.StatusSending)
+	errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.job.Status)
+	log.Infof(errS)
+	http.Error(w, errS, http.StatusBadRequest)
 }
 
 // RescheduleHandler resets the time when the job will start
@@ -95,6 +100,22 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
 
 	if daemon.job.Id == 0 {
 		errS := fmt.Sprintf("Ignore cancel, no job scheduled")
+		log.Infof(errS)
+		http.Error(w, errS, http.StatusBadRequest)
+		return
+	}
+
+	daemon.job.Scheduled = time.Time{}
+	daemon.UpdateStatus(juggler.StatusCancelling)
+}
+
+// CancelHandler cancels job execution
+func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
+	// Add headers to allow AJAX
+	juggler.SetHeaders(w)
+
+	if daemon.job.Status != juggler.StatusPrinting {
+		errS := fmt.Sprintf("Ignore pause, not printing")
 		log.Infof(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
