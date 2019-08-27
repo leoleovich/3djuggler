@@ -5,26 +5,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/leoleovich/3djuggler/juggler"
 	"github.com/leoleovich/3djuggler/gcodefeeder"
+	"github.com/leoleovich/3djuggler/juggler"
 	"net/http"
 	"net/url"
 )
 
 func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	statusWithProgress := string(job.Status)
-	if job.Status == juggler.StatusPrinting {
-		switch job.FeederStatus {
-		case gcodefeeder.Printing:
-			sofar := job.Progress
-			statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
-		case gcodefeeder.MMUBusy:
-			statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
-		case gcodefeeder.FSensorBusy:
-			statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
-		case gcodefeeder.Paused:
-			statusWithProgress = fmt.Sprintf("Printing paused manually")
-		}
+	// Detailed message if needed
+	switch job.FeederStatus {
+	case gcodefeeder.Printing:
+		sofar := job.Progress
+		statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
+	case gcodefeeder.MMUBusy:
+		statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
+	case gcodefeeder.FSensorBusy:
+		statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
+	case gcodefeeder.ManuallyPaused:
+		statusWithProgress = fmt.Sprintf("Printing paused manually")
 	}
 
 	data := url.Values{}

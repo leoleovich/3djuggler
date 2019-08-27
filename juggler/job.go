@@ -16,6 +16,7 @@ const (
 	StatusCancelling    = JobStatus("Cancelling")
 	StatusFinished      = JobStatus("Finished")
 	StatusButtonTimeout = JobStatus("Button timeout")
+	StatusPaused        = JobStatus("Paused")
 )
 
 type Job struct {

@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/leoleovich/3djuggler/juggler"
 	"github.com/leoleovich/3djuggler/gcodefeeder"
+	"github.com/leoleovich/3djuggler/juggler"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
@@ -66,7 +66,7 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
 		// Initial start
 		daemon.UpdateStatus(juggler.StatusSending)
 		return
-	} else if daemon.job.Status == juggler.StatusPrinting {
+	} else if daemon.job.Status == juggler.StatusPaused {
 		// Unpause
 		daemon.feeder.Start()
 		return

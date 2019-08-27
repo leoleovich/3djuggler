@@ -15,8 +15,9 @@ import (
 
 func usage() {
 	fmt.Println(`
-p: progress job by 10%
+pr: progress job by 10%
 s: start job
+p: pause job
 f: finish the job
 w: waiting for job
 b: waiting for a button`)
@@ -88,6 +89,10 @@ func (j *FakeJuggler) progress() {
 	log.Printf("Updated progress to %.1f%%", next)
 }
 
+func (j *FakeJuggler) pause() {
+	j.Job.Status = juggler.StatusPaused
+}
+
 func main() {
 	job := juggler.Job{
 		Status:   juggler.StatusWaitingJob,
@@ -123,6 +128,13 @@ func main() {
 		w.Write(b)
 	})
 
+	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		log.Println("pause")
+		j.pause()
+	})
+
+
 	go http.ListenAndServe(":8888", nil)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -133,7 +145,7 @@ func main() {
 		input, _ := reader.ReadString('\n')
 		c := strings.TrimSpace(input)
 		switch c {
-		case "p":
+		case "pg":
 			j.progress()
 		case "w":
 			j.waitForJob()
@@ -141,6 +153,8 @@ func main() {
 			j.waitForButton()
 		case "s":
 			j.start()
+		case "p":
+			j.pause()
 		case "f":
 			j.finish()
 		default:

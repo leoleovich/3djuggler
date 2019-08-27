@@ -22,7 +22,7 @@ const (
 	FSensorBusy
 	Ready
 	Printing
-	Paused
+	ManuallyPaused
 	MMUBusy
 	Finished
 	Error
@@ -34,7 +34,7 @@ var strStatus = []string{
 	"FSensorBusy",
 	"Ready",
 	"Printing",
-	"Paused",
+	"ManuallyPaused",
 	"MMUBusy",
 	"Finished",
 	"Error",
@@ -221,9 +221,14 @@ func (f *Feeder) Feed() error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		for ;f.status == Paused; {
-			time.Sleep(5 * time.Second)
-			log.Info("Feeder is paused")
+		for f.status == ManuallyPaused {
+			select {
+			case <-ctx.Done():
+				return errors.New("Context is Done")
+			default:
+				time.Sleep(5 * time.Second)
+				log.Info("Feeder is paused manually")
+			}	
 		}
 		f.status = Printing
 		err = f.write(ctx, line)
@@ -237,7 +242,7 @@ func (f *Feeder) Feed() error {
 }
 
 func (f *Feeder) Pause() {
-	f.status = Paused
+	f.status = ManuallyPaused
 }
 
 func (f *Feeder) Start() {

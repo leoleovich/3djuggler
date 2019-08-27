@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/leoleovich/3djuggler/juggler"
 	"github.com/leoleovich/3djuggler/gcodefeeder"
+	"github.com/leoleovich/3djuggler/juggler"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	octoFilename             = "3djuggler.gcode"
 	jobfile                  = "/tmp/job"
 	waitingForButtonInterval = time.Duration(10 * time.Minute)
 	pollingInterval          = time.Duration(15 * time.Second)
@@ -180,8 +179,9 @@ func main() {
 
 				go daemon.feeder.Feed()
 
-			case juggler.StatusPrinting:
+			case juggler.StatusPrinting, juggler.StatusPaused:
 				log.Info("Job ", daemon.job.Id, " is currently in progress")
+				// Check status from intern
 				err = daemon.ie.getJob(daemon.job.Id)
 				if err != nil {
 					log.Error("Can't report status to intern: ", err)
@@ -193,15 +193,19 @@ func main() {
 				}
 				daemon.job.Progress = float64(daemon.feeder.Progress())
 				daemon.job.FeederStatus = daemon.feeder.Status()
+
 				switch daemon.job.FeederStatus {
+				case gcodefeeder.Printing:
+					daemon.UpdateStatus(juggler.StatusPrinting)
 				case gcodefeeder.Finished:
 					daemon.UpdateStatus(juggler.StatusFinished)
 				case gcodefeeder.Error:
 					daemon.UpdateStatus(juggler.StatusCancelling)
+				case gcodefeeder.ManuallyPaused, gcodefeeder.FSensorBusy, gcodefeeder.MMUBusy:
+					daemon.UpdateStatus(juggler.StatusPaused)
 				default:
 					daemon.UpdateStatus(daemon.job.Status)
 				}
-
 			case juggler.StatusCancelling:
 				fallthrough
 			case juggler.StatusFinished:
