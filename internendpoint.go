@@ -14,16 +14,18 @@ import (
 func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	statusWithProgress := string(job.Status)
 	// Detailed message if needed
-	switch job.FeederStatus {
-	case gcodefeeder.Printing:
+	if job.Status == juggler.StatusPrinting && job.FeederStatus == gcodefeeder.Printing {
 		sofar := job.Progress
 		statusWithProgress = fmt.Sprintf("Printing... (%0.1f%%)", sofar)
-	case gcodefeeder.MMUBusy:
-		statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
-	case gcodefeeder.FSensorBusy:
-		statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
-	case gcodefeeder.ManuallyPaused:
-		statusWithProgress = fmt.Sprintf("Printing paused manually")
+	} else if job.Status == juggler.StatusPaused {
+		switch job.FeederStatus {
+		case gcodefeeder.MMUBusy:
+			statusWithProgress = fmt.Sprintf("Printing paused: MMU paused printing")
+		case gcodefeeder.FSensorBusy:
+			statusWithProgress = fmt.Sprintf("Printing paused: Filament sensor paused printing")
+		case gcodefeeder.ManuallyPaused:
+			statusWithProgress = fmt.Sprintf("Printing paused manually")
+		}
 	}
 
 	data := url.Values{}
