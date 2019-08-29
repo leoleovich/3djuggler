@@ -145,7 +145,7 @@ func main() {
 		input, _ := reader.ReadString('\n')
 		c := strings.TrimSpace(input)
 		switch c {
-		case "pg":
+		case "pr":
 			j.progress()
 		case "w":
 			j.waitForJob()

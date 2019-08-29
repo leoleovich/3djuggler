@@ -69,6 +69,7 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
 	} else if daemon.job.Status == juggler.StatusPaused {
 		// Unpause
 		daemon.feeder.Start()
+		daemon.UpdateStatus(juggler.StatusPrinting)
 		return
 	}
 
@@ -122,4 +123,5 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	daemon.feeder.Pause()
+	daemon.UpdateStatus(juggler.StatusPaused)
 }
