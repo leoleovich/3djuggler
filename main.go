@@ -18,6 +18,8 @@ var (
 	jobfile                  = "/tmp/job"
 	waitingForButtonInterval = time.Duration(10 * time.Minute)
 	pollingInterval          = time.Duration(15 * time.Second)
+	defaultListen            = "[::1]:8888"
+	defaultSerial            = "/dev/ttyACM0"
 )
 
 type InternEnpoint struct {
@@ -32,6 +34,7 @@ type InternEnpoint struct {
 
 type Config struct {
 	Listen        string
+	Serial        string
 	InternEnpoint *InternEnpoint
 }
 
@@ -82,8 +85,12 @@ func main() {
 	jsonFile.Close()
 
 	if daemon.config.Listen == "" {
-		daemon.config.Listen = "[::1]:8888"
+		daemon.config.Listen = defaultListen
 	}
+	if daemon.config.Serial == "" {
+		daemon.config.Serial = defaultSerial
+	}
+
 	http.HandleFunc("/info", daemon.InfoHandler)
 	http.HandleFunc("/start", daemon.StartHandler)
 	http.HandleFunc("/pause", daemon.PauseHandler)
@@ -168,7 +175,7 @@ func main() {
 				}
 
 				daemon.feeder, err = gcodefeeder.NewFeeder(
-					"/dev/ttyACM0",
+					daemon.config.Serial,
 					daemon.jobfile,
 				)
 				if err != nil {
