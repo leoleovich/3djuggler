@@ -9,7 +9,24 @@ import (
 	"github.com/leoleovich/3djuggler/juggler"
 	"net/http"
 	"net/url"
+	"time"
 )
+
+const maxHTTPRetries = 3
+const requestTimeout = 20 * time.Second
+const retryInterval = 5 * time.Second
+
+func requestWithRetry(request *http.Request) (resp *http.Response, err error) {
+	client := &http.Client{Timeout: requestTimeout}
+	for i := 0; i < maxHTTPRetries; i++ {
+		resp, err = client.Do(request)
+		if err == nil {
+			return resp, nil
+		}
+		time.Sleep(retryInterval)
+	}
+	return nil, err
+}
 
 func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	statusWithProgress := string(job.Status)
@@ -38,12 +55,15 @@ func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	data.Add("office_name", ie.OfficeName)
 
 	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
-	client := &http.Client{}
-	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	resp, err := requestWithRetry(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
 	return nil
 }
 
@@ -56,12 +76,14 @@ func (ie *InternEnpoint) reschedule() error {
 	data.Add("office_name", ie.OfficeName)
 
 	req, err := http.NewRequest("POST", ie.Api_uri+"/printer/", bytes.NewBufferString(data.Encode()))
-	client := &http.Client{}
-	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	resp, err := requestWithRetry(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
 }
 
@@ -75,12 +97,14 @@ func (ie *InternEnpoint) deleteJob(job *juggler.Job) error {
 	data.Add("office_name", ie.OfficeName)
 
 	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
-	client := &http.Client{}
-	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	resp, err := requestWithRetry(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
 }
 
@@ -100,11 +124,14 @@ func (ie *InternEnpoint) getJob(id int) error {
 	}
 
 	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
-	client := &http.Client{}
-	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
+	resp, err := requestWithRetry(req)
+	if err != nil {
+		return err
+	}
+
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("bad response status from intern endpoint: %d", resp.StatusCode)
@@ -140,11 +167,13 @@ func (ie *InternEnpoint) reportStat() error {
 	data.Add("office_name", ie.OfficeName)
 
 	req, err := http.NewRequest("POST", ie.Api_uri+"/printer/", bytes.NewBufferString(data.Encode()))
-	client := &http.Client{}
-	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	resp, err := requestWithRetry(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
 	return nil
 }
