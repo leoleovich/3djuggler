@@ -20,6 +20,7 @@ type Daemon struct {
 	job        *juggler.Job
 	ie         *InternEnpoint
 	feeder     *gcodefeeder.Feeder
+	statusChan chan juggler.JobStatus
 }
 
 func (daemon *Daemon) Start() {
@@ -33,6 +34,8 @@ func (daemon *Daemon) Start() {
 	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
 	log.Debug("Started http server on ", daemon.config.Listen)
 
+	daemon.statusChan = make(chan juggler.JobStatus, 10)
+
 	if err := daemon.ie.reschedule(); err != nil {
 		log.Error("reschedule failed: ", err)
 	}
@@ -40,10 +43,21 @@ func (daemon *Daemon) Start() {
 		select {
 		case <-daemon.timer.C:
 			daemon.timer.Reset(pollingInterval)
+			select {
+			case daemon.job.Status = <-daemon.statusChan:
+				log.Debugf("Assigning status '%s'", daemon.job.Status)
+			default:
+				log.Debug("No status updates")
+			}
+			log.Infof("My status is: '%s'", daemon.job.Status)
+			log.Infof("Updating intern status to '%s'", daemon.job.Status)
+			if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
+				log.Error("Can't report it to intern: ", err)
+			}
+
 			if err = daemon.ie.reportStat(); err != nil {
 				log.Error(err)
 			}
-			log.Info("My status is: ", daemon.job.Status)
 
 			switch daemon.job.Status {
 			case juggler.StatusWaitingJob:
@@ -154,21 +168,22 @@ func (daemon *Daemon) Start() {
 			default:
 				log.Error("Job ", daemon.job, " is in a weird state")
 			}
+
 		}
 	}
 }
 
 func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
-	daemon.job.Status = status
-
-	// Don't send to intern this status
-	if status == juggler.StatusWaitingJob {
-		return
-	}
-
-	log.Infof("Updating intern status to %s", status)
-	if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
-		log.Error("Can't report it to intern: ", err)
+	// Don't put the same status in the channel
+	if daemon.job.Status != status {
+		select {
+		case daemon.statusChan <- status:
+			log.Debugf("Requesting status change to: '%s'", status)
+		default:
+			log.Error("Unable to request status change. statusChan is full")
+		}
+	} else {
+		log.Debug("My status did not change")
 	}
 }
 
