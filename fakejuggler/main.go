@@ -134,7 +134,6 @@ func main() {
 		j.pause()
 	})
 
-
 	go http.ListenAndServe(":8888", nil)
 
 	reader := bufio.NewReader(os.Stdin)

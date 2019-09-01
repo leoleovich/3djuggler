@@ -228,7 +228,7 @@ func (f *Feeder) Feed() error {
 			default:
 				time.Sleep(5 * time.Second)
 				log.Info("Feeder is paused manually")
-			}	
+			}
 		}
 		f.status = Printing
 		err = f.write(ctx, line)

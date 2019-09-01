@@ -29,6 +29,12 @@ func requestWithRetry(request *http.Request) (resp *http.Response, err error) {
 }
 
 func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
+	// Don't report default daemon status
+	// TODO: think about separation of daemon and job statuses
+	if job.Status == juggler.StatusWaitingJob {
+		return nil
+	}
+
 	statusWithProgress := string(job.Status)
 	// Detailed message if needed
 	if job.Status == juggler.StatusPrinting && job.FeederStatus == gcodefeeder.Printing {
