@@ -46,14 +46,14 @@ func (daemon *Daemon) Start() {
 			select {
 			case daemon.job.Status = <-daemon.statusChan:
 				log.Debugf("Assigning status '%s'", daemon.job.Status)
+				log.Infof("Updating intern status to '%s'", daemon.job.Status)
+				if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
+					log.Error("Can't report it to intern: ", err)
+				}
 			default:
 				log.Debug("No status updates")
 			}
 			log.Infof("My status is: '%s'", daemon.job.Status)
-			log.Infof("Updating intern status to '%s'", daemon.job.Status)
-			if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
-				log.Error("Can't report it to intern: ", err)
-			}
 
 			if err = daemon.ie.reportStat(); err != nil {
 				log.Error(err)
@@ -174,16 +174,11 @@ func (daemon *Daemon) Start() {
 }
 
 func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
-	// Don't put the same status in the channel
-	if daemon.job.Status != status {
-		select {
-		case daemon.statusChan <- status:
-			log.Debugf("Requesting status change to: '%s'", status)
-		default:
-			log.Error("Unable to request status change. statusChan is full")
-		}
-	} else {
-		log.Debug("My status did not change")
+	select {
+	case daemon.statusChan <- status:
+		log.Debugf("Requesting status change to: '%s'", status)
+	default:
+		log.Error("Unable to request status change. statusChan is full")
 	}
 }
 
