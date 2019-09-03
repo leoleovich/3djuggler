@@ -139,6 +139,9 @@ func (f *Feeder) read(ctx context.Context) {
 			} else if strings.Contains(bufStr, "fsensor") {
 				f.status = FSensorBusy
 			} else if strings.Contains(bufStr, "MMU") {
+				if strings.Contains(bufStr, "DISABLED") {
+					continue
+				}
 				f.status = MMUBusy
 			} else if strings.Contains(bufStr, "start") {
 				// Often "start" comes from MMU, filament sensor etc:
