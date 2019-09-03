@@ -14,7 +14,7 @@ import (
 var (
 	jobfile                  = "/tmp/job"
 	waitingForButtonInterval = time.Duration(10 * time.Minute)
-	pollingInterval          = time.Duration(15 * time.Second)
+	pollingInterval          = time.Duration(5 * time.Second)
 	defaultListen            = "[::1]:8888"
 	defaultSerial            = "/dev/ttyACM0"
 )
