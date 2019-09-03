@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const maxHTTPRetries = 3
@@ -50,6 +52,8 @@ func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 			statusWithProgress = fmt.Sprintf("Printing paused manually")
 		}
 	}
+
+	log.Infof("Updating intern status to '%s'", statusWithProgress)
 
 	data := url.Values{}
 	data.Set("app", ie.Api_app)

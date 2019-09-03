@@ -46,7 +46,6 @@ func (daemon *Daemon) Start() {
 			select {
 			case daemon.job.Status = <-daemon.statusChan:
 				log.Debugf("Assigning status '%s'", daemon.job.Status)
-				log.Infof("Updating intern status to '%s'", daemon.job.Status)
 				if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
 					log.Error("Can't report it to intern: ", err)
 				}
@@ -60,9 +59,11 @@ func (daemon *Daemon) Start() {
 			}
 
 			switch daemon.job.Status {
-			case juggler.StatusWaitingJob:
+			case juggler.StatusWaitingJob, juggler.StatusButtonTimeout:
+				daemon.job.Id = 0
 				if err = daemon.ie.nextJob(); err != nil {
 					log.Error(err)
+					daemon.UpdateStatus(juggler.StatusWaitingJob)
 					break
 				}
 				daemon.job.Id = daemon.ie.job.Id
@@ -94,10 +95,8 @@ func (daemon *Daemon) Start() {
 					log.Info("Waiting ", daemon.job.Scheduled.Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
 				} else {
 					log.Warning("Nobody pressed the button on time")
-					daemon.UpdateStatus(juggler.StatusButtonTimeout)
 					log.Warning("Timeout while waiting for a job. Switching back to ", daemon.job.Status)
-					daemon.UpdateStatus(juggler.StatusWaitingJob)
-					daemon.job.Id = 0
+					daemon.UpdateStatus(juggler.StatusButtonTimeout)
 				}
 
 			case juggler.StatusSending:
@@ -163,7 +162,6 @@ func (daemon *Daemon) Start() {
 				if err != nil {
 					log.Error(err)
 				}
-				daemon.job.Id = 0
 				daemon.UpdateStatus(juggler.StatusWaitingJob)
 			default:
 				log.Error("Job ", daemon.job, " is in a weird state")
