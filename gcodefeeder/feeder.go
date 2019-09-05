@@ -24,6 +24,7 @@ const (
 	Printing
 	ManuallyPaused
 	MMUBusy
+	New
 	Finished
 	Error
 )
@@ -36,6 +37,7 @@ var strStatus = []string{
 	"Printing",
 	"ManuallyPaused",
 	"MMUBusy",
+	"New",
 	"Finished",
 	"Error",
 }
@@ -94,6 +96,7 @@ func (f *Feeder) Cancel() {
 	f.writer.Write([]byte("M107\n"))
 	f.writer.Flush()
 
+	f.status = New
 	f.tty.Close()
 }
 

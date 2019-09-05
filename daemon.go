@@ -146,16 +146,15 @@ func (daemon *Daemon) Start() {
 				case gcodefeeder.ManuallyPaused, gcodefeeder.FSensorBusy, gcodefeeder.MMUBusy:
 					daemon.UpdateStatus(juggler.StatusPaused)
 				default:
-					daemon.UpdateStatus(daemon.job.Status)
+					log.Warning("Feeder status is: ", daemon.feeder.Status())
 				}
 			case juggler.StatusCancelling:
 				fallthrough
 			case juggler.StatusFinished:
-				log.Info("Stopping feeder")
-				if daemon.feeder != nil {
+				if daemon.feeder != nil && daemon.feeder.Status() != gcodefeeder.New {
+					log.Info("Stopping feeder")
 					daemon.feeder.Cancel()
 				}
-				daemon.feeder = nil
 
 				log.Info("Deleting from intern")
 				err = daemon.ie.deleteJob(daemon.job)
@@ -212,11 +211,19 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
 	if daemon.job.Status == juggler.StatusWaitingButton {
 		// Initial start
 		daemon.UpdateStatus(juggler.StatusSending)
+		for daemon.job.Status != juggler.StatusSending {
+			log.Infof("Wating for %s status to be set", juggler.StatusSending)
+			time.Sleep(1 * time.Second)
+		}
 		return
 	} else if daemon.job.Status == juggler.StatusPaused {
 		// Unpause
 		daemon.feeder.Start()
 		daemon.UpdateStatus(juggler.StatusPrinting)
+		for daemon.job.Status != juggler.StatusPrinting {
+			log.Infof("Wating for %s status to be set", juggler.StatusPrinting)
+			time.Sleep(1 * time.Second)
+		}
 		return
 	}
 
@@ -255,6 +262,10 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
 
 	daemon.job.Scheduled = time.Time{}
 	daemon.UpdateStatus(juggler.StatusCancelling)
+	for daemon.job.Status != juggler.StatusCancelling {
+		log.Infof("Wating for %s status to be set", juggler.StatusCancelling)
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // CancelHandler cancels job execution
@@ -271,4 +282,8 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 
 	daemon.feeder.Pause()
 	daemon.UpdateStatus(juggler.StatusPaused)
+	for daemon.job.Status != juggler.StatusPaused {
+		log.Infof("Wating for %s status to be set", juggler.StatusPaused)
+		time.Sleep(1 * time.Second)
+	}
 }

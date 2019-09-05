@@ -15,7 +15,7 @@ import (
 )
 
 const maxHTTPRetries = 3
-const requestTimeout = 20 * time.Second
+const requestTimeout = 60 * time.Second
 const retryInterval = 5 * time.Second
 
 func requestWithRetry(request *http.Request) (resp *http.Response, err error) {
