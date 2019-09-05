@@ -31,6 +31,7 @@ func (daemon *Daemon) Start() {
 	http.HandleFunc("/pause", daemon.PauseHandler)
 	http.HandleFunc("/reschedule", daemon.RescheduleHandler)
 	http.HandleFunc("/cancel", daemon.CancelHandler)
+	http.HandleFunc("/version", daemon.VersionHandler)
 	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
 	log.Debug("Started http server on ", daemon.config.Listen)
 
@@ -286,4 +287,12 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 		log.Infof("Wating for %s status to be set", juggler.StatusPaused)
 		time.Sleep(1 * time.Second)
 	}
+}
+
+// VersionHandler cancels job execution
+func (daemon *Daemon) VersionHandler(w http.ResponseWriter, r *http.Request) {
+	// Add headers to allow AJAX
+	juggler.SetHeaders(w)
+	fmt.Fprintf(w, gitCommit)
+
 }

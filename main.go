@@ -17,6 +17,8 @@ var (
 	pollingInterval          = time.Duration(5 * time.Second)
 	defaultListen            = "[::1]:8888"
 	defaultSerial            = "/dev/ttyACM0"
+	// Set during compilation to export version via /version http handler
+	gitCommit = ""
 )
 
 type InternEnpoint struct {
