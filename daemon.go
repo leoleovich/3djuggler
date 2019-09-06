@@ -151,7 +151,7 @@ func (daemon *Daemon) Start() {
 			case juggler.StatusCancelling:
 				fallthrough
 			case juggler.StatusFinished:
-				if daemon.feeder != nil && daemon.feeder.Status() != gcodefeeder.New {
+				if daemon.feeder != nil && daemon.feeder.Status() != gcodefeeder.Finished {
 					log.Info("Stopping feeder")
 					daemon.feeder.Cancel()
 				}

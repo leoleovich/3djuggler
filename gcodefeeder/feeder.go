@@ -24,7 +24,6 @@ const (
 	Printing
 	ManuallyPaused
 	MMUBusy
-	New
 	Finished
 	Error
 )
@@ -37,7 +36,6 @@ var strStatus = []string{
 	"Printing",
 	"ManuallyPaused",
 	"MMUBusy",
-	"New",
 	"Finished",
 	"Error",
 }
@@ -87,6 +85,7 @@ func NewFeeder(deviceName, fileName string) (*Feeder, error) {
 }
 
 func (f *Feeder) Cancel() {
+	log.Debug("Feeder: Cancel is called")
 	f.cancelFunc()
 	//  turn off temperature
 	f.writer.Write([]byte("M104 S0\n"))
@@ -96,8 +95,8 @@ func (f *Feeder) Cancel() {
 	f.writer.Write([]byte("M107\n"))
 	f.writer.Flush()
 
-	f.status = New
 	f.tty.Close()
+	f.status = Finished
 }
 
 func (f *Feeder) Progress() int {
@@ -121,7 +120,7 @@ func (f *Feeder) connect() error {
 }
 
 func (f *Feeder) read(ctx context.Context) {
-	defer f.cancelFunc()
+	defer f.Cancel()
 
 	seenStart := false
 
@@ -132,11 +131,13 @@ func (f *Feeder) read(ctx context.Context) {
 		default:
 			buf, _, err := f.reader.ReadLine()
 			if err != nil {
+				log.Errorf("Feeder: Error reading from printer: %v", err)
+				f.status = Error
 				return
 			}
 			bufStr := string(buf)
 
-			log.Debug("READING:", bufStr)
+			log.Debug("Feeder: READING: ", bufStr)
 			if strings.HasPrefix(bufStr, "ok") && seenStart {
 				f.printerAck <- true
 			} else if strings.Contains(bufStr, "fsensor") {
@@ -162,6 +163,7 @@ func (f *Feeder) read(ctx context.Context) {
 					seenStart = true
 					f.printerAck <- true
 				} else if seenStart && strings.HasSuffix(bufStr, "start") {
+					log.Warning("Feeder: Second 'start' sequence")
 					return
 				}
 			}
@@ -176,7 +178,7 @@ func (f *Feeder) write(ctx context.Context, command string) error {
 		return nil
 	}
 
-	log.Debug("WRITING:", rcmd)
+	log.Debug("Feeder: WRITING: ", rcmd)
 	_, err := f.writer.Write([]byte(rcmd + "\n"))
 	if err != nil {
 		return err
@@ -187,7 +189,7 @@ func (f *Feeder) write(ctx context.Context, command string) error {
 		// Ignore errors because not all gcodes have proper progress injected
 		f.progress, err = strconv.Atoi(s)
 		if err != nil {
-			log.Debug("Progress parsing error.", err, "Continue...")
+			log.Debug("Feeder: Progress parsing error.", err, "Continue...")
 		}
 	}
 
@@ -233,7 +235,7 @@ func (f *Feeder) Feed() error {
 				return errors.New("Context is Done")
 			default:
 				time.Sleep(5 * time.Second)
-				log.Info("Feeder is paused manually")
+				log.Info("Feeder: paused manually")
 			}
 		}
 		f.status = Printing
