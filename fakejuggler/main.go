@@ -134,6 +134,12 @@ func main() {
 		j.pause()
 	})
 
+	http.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		juggler.SetHeaders(w)
+		log.Println("version")
+		fmt.Fprintf(w, "12345")
+	})
+
 	go http.ListenAndServe(":8888", nil)
 
 	reader := bufio.NewReader(os.Stdin)
