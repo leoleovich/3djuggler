@@ -1,0 +1,11 @@
+{
+   "InternEnpoint":{
+      "api_uri":"https://example.com/3dprinters/api",
+      "api_key":"<intern_password>",
+      "api_app":"<intern_login>",
+      "officeName":"Test",
+      "printerName":"Test"
+   },
+   "Serial": "/dev/ttyACM0",
+   "Listen": "[::1]:8888"
+}

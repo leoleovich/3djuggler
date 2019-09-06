@@ -4,7 +4,7 @@ You will need to implement internal website API, which supports following:
   * Give a new job
   * Give details about job
   * Update job status
-### /printer. Depending on a POST params it should:  
+### /printer. Depending on a POST params it should:
   * Refresh printer healthcheck
   * Reschedule jobs
 
@@ -44,11 +44,11 @@ Juggler also supports following
 There are extra flags you may find useful:
 ```
   -config string
-    	Main config (default "3djuggler.json")
+    Main config (default "3djuggler.json")
   -log string
-    	Where to log (default "/var/log/3djuggler.log")
+    Where to log (default "/var/log/3djuggler.log")
   -verbose
-    	Use verbose log output
+    Use verbose log output
 ```
 
 
