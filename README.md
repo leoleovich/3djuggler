@@ -1,12 +1,35 @@
+## Integration with internal website (intern)
 You will need to implement internal website API, which supports following:
-* /job. Depending on a POST params it should:
+### /job. Depending on a POST params it should:
   * Give a new job
   * Give details about job
   * Update job status
-* /printer. Depending on a POST params it should:  
+### /printer. Depending on a POST params it should:  
   * Refresh printer healthcheck
   * Reschedule jobs
 
 Every API call must send Username (app) and Password (token) as POST params
+
+## Intergration with printer management device:
+Printer management device will need to interact with 3djuggler in order to control the job state.
+By default http server will listern on localhost:8888. Juggler supports following blocking API calls:
+### /info
+Gives information about current job state, printed percentage etc
+### /start
+Start the job
+### /pause
+Pause the job
+### /cancel
+Cancel the job
+### /reshedule
+Give more time before jobs gets marked as "timed out"
+### /version
+In order to use this functionality, you needs to compile juggler like this:
+```
+go run -ldflags "-X main.gitCommit=123" github.com/leoleovich/3djuggler
+```
+Where 123 is a commit hash. You don't have to use this functionality. In this case /version will simply return empty string
+
+
 
 I am providing code in the repository to you under an open source license. Because this is my personal repository, the license you receive to my code is from me and not my employer (Facebook)
