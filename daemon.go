@@ -63,7 +63,6 @@ func (daemon *Daemon) Start() {
 				daemon.job.Id = 0
 				if err = daemon.ie.nextJob(); err != nil {
 					log.Error(err)
-					daemon.UpdateStatus(juggler.StatusWaitingJob)
 					break
 				}
 				daemon.job.Id = daemon.ie.job.Id
