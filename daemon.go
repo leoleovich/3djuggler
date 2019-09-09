@@ -138,7 +138,10 @@ func (daemon *Daemon) Start() {
 
 				switch daemon.job.FeederStatus {
 				case gcodefeeder.Printing:
-					daemon.UpdateStatus(juggler.StatusPrinting)
+					// We need to update percentage of print
+					if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
+						log.Error("Can't report it to intern: ", err)
+					}
 				case gcodefeeder.Finished:
 					daemon.UpdateStatus(juggler.StatusFinished)
 				case gcodefeeder.Error:
