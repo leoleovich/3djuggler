@@ -121,8 +121,8 @@ func (daemon *Daemon) Start() {
 
 				go daemon.feeder.Feed()
 
-			case juggler.StatusPrinting, juggler.StatusPaused:
-				log.Info("Job ", daemon.job.Id, " is currently in progress")
+			case juggler.StatusPrinting:
+				log.Infof("Job %d is currently printing", daemon.job.Id)
 				// Check status from intern
 				err = daemon.ie.getJob(daemon.job.Id)
 				if err != nil {
@@ -149,7 +149,18 @@ func (daemon *Daemon) Start() {
 				case gcodefeeder.ManuallyPaused, gcodefeeder.FSensorBusy, gcodefeeder.MMUBusy:
 					daemon.UpdateStatus(juggler.StatusPaused)
 				default:
-					log.Warning("Feeder status is: ", daemon.feeder.Status())
+					log.Warning("Printing. Feeder status is: ", daemon.feeder.Status())
+				}
+			case juggler.StatusPaused:
+				daemon.job.FeederStatus = daemon.feeder.Status()
+				log.Infof("Job %d is currently paused", daemon.job.Id)
+				switch daemon.job.FeederStatus {
+				case gcodefeeder.Printing:
+					daemon.UpdateStatus(juggler.StatusPrinting)
+				case gcodefeeder.Error:
+					daemon.UpdateStatus(juggler.StatusCancelling)
+				default:
+					log.Warning("Paused. Feeder status is: ", daemon.feeder.Status())
 				}
 			case juggler.StatusCancelling:
 				fallthrough
