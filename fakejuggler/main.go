@@ -70,6 +70,7 @@ func (j *FakeJuggler) waitForButton() {
 	j.Job.Status = juggler.StatusWaitingButton
 	j.Job.Fetched = time.Now()
 	j.Job.Scheduled = time.Now().Add(600 * time.Second)
+	j.Job.Color = "Red"
 }
 
 func (j *FakeJuggler) waitForJob() {

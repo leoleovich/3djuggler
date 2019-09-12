@@ -71,6 +71,7 @@ func (daemon *Daemon) Start() {
 				daemon.job.FileContent = daemon.ie.job.FileContent
 				daemon.job.Progress = daemon.ie.job.Progress
 				daemon.job.Owner = daemon.ie.job.Owner
+				daemon.job.Color = daemon.ie.job.Color
 				daemon.job.Fetched = time.Now()
 				daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
 
@@ -204,6 +205,7 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 		Filename:  daemon.job.Filename,
 		Progress:  daemon.job.Progress,
 		Status:    daemon.job.Status,
+		Color:	   daemon.job.Color,
 		Fetched:   daemon.job.Fetched,
 		Scheduled: daemon.job.Scheduled,
 	}

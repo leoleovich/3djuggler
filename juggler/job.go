@@ -25,6 +25,7 @@ type Job struct {
 	FileContent  string             `json:"file_content"`
 	Owner        string             `json:"owner"`
 	Status       JobStatus          `json:"status"`
+	Color        string             `json:"color"`
 	Progress     float64            `json:"progress"`
 	Fetched      time.Time          `json:"fetched"`
 	Scheduled    time.Time          `json:"scheduled"`
