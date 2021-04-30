@@ -66,7 +66,7 @@ func NewFeeder(deviceName, fileName string) (*Feeder, error) {
 	f := Feeder{
 		deviceName:     deviceName,
 		fileName:       fileName,
-		printerAck:     make(chan bool, 0),
+		printerAck:     make(chan bool),
 		progressRegexp: regexp.MustCompile("M73 P([0-9]+).*"),
 	}
 	f.status = Connecting
