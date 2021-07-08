@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -131,6 +132,9 @@ func (f *Feeder) read(ctx context.Context) {
 		default:
 			buf, _, err := f.reader.ReadLine()
 			if err != nil {
+				if err == syscall.EINTR {
+					continue
+				}
 				log.Errorf("Feeder: Error reading from printer: %v", err)
 				f.status = Error
 				return
