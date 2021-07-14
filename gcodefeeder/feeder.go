@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"go.bug.st/serial.v1"
+	"go.bug.st/serial"
 	"os"
 	"regexp"
 	"strconv"
