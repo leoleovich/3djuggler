@@ -28,7 +28,6 @@ type FakeJuggler struct {
 }
 
 func (j *FakeJuggler) start() {
-
 	switch j.Job.Status {
 	case juggler.StatusSending:
 		log.Println("Asked to start when already printing")
@@ -43,7 +42,6 @@ func (j *FakeJuggler) start() {
 	j.Job.Status = juggler.StatusPrinting
 }
 func (j *FakeJuggler) cancel() {
-
 	switch j.Job.Status {
 	case juggler.StatusWaitingJob:
 		log.Println("Asked to cancel when waiting for job")

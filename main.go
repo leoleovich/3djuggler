@@ -54,7 +54,7 @@ func main() {
 	}
 	log.SetOutput(os.Stdout)
 
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err == nil {
 		log.SetOutput(file)
 	} else {
@@ -63,7 +63,6 @@ func main() {
 	defer file.Close()
 
 	daemon := &Daemon{
-		timer:  time.NewTimer(0),
 		config: &Config{},
 		job:    &juggler.Job{Status: juggler.StatusWaitingJob},
 	}
