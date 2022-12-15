@@ -5,13 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"go.bug.st/serial"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"go.bug.st/serial"
 )
 
 type Status int
@@ -59,6 +61,7 @@ type Feeder struct {
 	reader         *bufio.Reader
 	progressRegexp *regexp.Regexp
 
+	sync.Mutex
 	cancelFunc context.CancelFunc
 }
 
@@ -85,6 +88,8 @@ func NewFeeder(deviceName, fileName string) (*Feeder, error) {
 }
 
 func (f *Feeder) Cancel() {
+	f.Lock()
+	defer f.Unlock()
 	log.Debug("Feeder: Cancel is called")
 	f.cancelFunc()
 	//  turn off temperature
