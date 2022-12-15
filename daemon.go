@@ -121,7 +121,11 @@ func (daemon *Daemon) Start() {
 			}
 			daemon.UpdateStatus(juggler.StatusPrinting)
 
-			go daemon.feeder.Feed()
+			go func() {
+				if err = daemon.feeder.Feed(); err != nil {
+					log.Error(err)
+				}
+			}()
 
 		case juggler.StatusPrinting:
 			log.Infof("Job %d is currently printing", daemon.job.Id)
