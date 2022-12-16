@@ -30,7 +30,7 @@ func requestWithRetry(request *http.Request) (resp *http.Response, err error) {
 	return nil, err
 }
 
-func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
+func (ie *InternEndpoint) reportJobStatusChange(job *juggler.Job) error {
 	// Don't report default daemon status
 	// TODO: think about separation of daemon and job statuses
 	if job.Status == juggler.StatusWaitingJob {
@@ -56,15 +56,15 @@ func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	log.Infof("Updating intern status to '%s'", statusWithProgress)
 
 	data := url.Values{}
-	data.Set("app", ie.Api_app)
-	data.Add("token", ie.Api_key)
+	data.Set("app", ie.APIApp)
+	data.Add("token", ie.APIKey)
 	data.Add("action", "update")
 	data.Add("status", statusWithProgress)
-	data.Add("id", fmt.Sprintf("%d", job.Id))
+	data.Add("id", fmt.Sprintf("%d", job.ID))
 	data.Add("printer_name", ie.PrinterName)
 	data.Add("office_name", ie.OfficeName)
 
-	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ie.APIURI+"/job/", bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -77,15 +77,15 @@ func (ie *InternEnpoint) reportJobStatusChange(job *juggler.Job) error {
 	return nil
 }
 
-func (ie *InternEnpoint) reschedule() error {
+func (ie *InternEndpoint) reschedule() error {
 	data := url.Values{}
-	data.Set("app", ie.Api_app)
-	data.Add("token", ie.Api_key)
+	data.Set("app", ie.APIApp)
+	data.Add("token", ie.APIKey)
 	data.Add("action", "reschedule")
 	data.Add("printer_name", ie.PrinterName)
 	data.Add("office_name", ie.OfficeName)
 
-	req, err := http.NewRequest("POST", ie.Api_uri+"/printer/", bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ie.APIURI+"/printer/", bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -97,16 +97,16 @@ func (ie *InternEnpoint) reschedule() error {
 	return nil
 }
 
-func (ie *InternEnpoint) deleteJob(job *juggler.Job) error {
+func (ie *InternEndpoint) deleteJob(job *juggler.Job) error {
 	data := url.Values{}
-	data.Set("app", ie.Api_app)
-	data.Add("token", ie.Api_key)
+	data.Set("app", ie.APIApp)
+	data.Add("token", ie.APIKey)
 	data.Add("action", "delete")
-	data.Add("id", fmt.Sprintf("%d", job.Id))
+	data.Add("id", fmt.Sprintf("%d", job.ID))
 	data.Add("printer_name", ie.PrinterName)
 	data.Add("office_name", ie.OfficeName)
 
-	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ie.APIURI+"/job/", bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -118,14 +118,14 @@ func (ie *InternEnpoint) deleteJob(job *juggler.Job) error {
 	return nil
 }
 
-func (ie *InternEnpoint) nextJob() error {
+func (ie *InternEndpoint) nextJob() error {
 	return ie.getJob(0)
 }
 
-func (ie *InternEnpoint) getJob(id int) error {
+func (ie *InternEndpoint) getJob(id int) error {
 	data := url.Values{}
-	data.Set("app", ie.Api_app)
-	data.Add("token", ie.Api_key)
+	data.Set("app", ie.APIApp)
+	data.Add("token", ie.APIKey)
 	data.Add("action", "get")
 	data.Add("printer_name", ie.PrinterName)
 	data.Add("office_name", ie.OfficeName)
@@ -133,7 +133,7 @@ func (ie *InternEnpoint) getJob(id int) error {
 		data.Add("id", fmt.Sprint(id))
 	}
 
-	req, err := http.NewRequest("POST", ie.Api_uri+"/job/", bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ie.APIURI+"/job/", bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (ie *InternEnpoint) getJob(id int) error {
 	}
 
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("bad response status from intern endpoint: %d", resp.StatusCode)
 	}
 	dec := json.NewDecoder(resp.Body)
@@ -161,22 +161,22 @@ func (ie *InternEnpoint) getJob(id int) error {
 	}
 	ie.job = result.Content
 
-	if ie.job.Id == 0 {
+	if ie.job.ID == 0 {
 		return errors.New("Nothing to print")
 	}
 
 	return nil
 }
 
-func (ie *InternEnpoint) reportStat() error {
+func (ie *InternEndpoint) reportStat() error {
 	data := url.Values{}
-	data.Set("app", ie.Api_app)
-	data.Add("token", ie.Api_key)
+	data.Set("app", ie.APIApp)
+	data.Add("token", ie.APIKey)
 	data.Add("action", "heartbeat")
 	data.Add("printer_name", ie.PrinterName)
 	data.Add("office_name", ie.OfficeName)
 
-	req, err := http.NewRequest("POST", ie.Api_uri+"/printer/", bytes.NewBufferString(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, ie.APIURI+"/printer/", bytes.NewBufferString(data.Encode()))
 	if err != nil {
 		return err
 	}

@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/leoleovich/3djuggler/gcodefeeder"
@@ -17,7 +17,7 @@ type Daemon struct {
 	config     *Config
 	jobfile    string
 	job        *juggler.Job
-	ie         *InternEnpoint
+	ie         *InternEndpoint
 	feeder     *gcodefeeder.Feeder
 	statusChan chan juggler.JobStatus
 }
@@ -40,7 +40,7 @@ func (daemon *Daemon) Start() {
 	if err := daemon.ie.reschedule(); err != nil {
 		log.Error("reschedule failed: ", err)
 	}
-	for _ = range time.Tick(pollingInterval) {
+	for range time.Tick(pollingInterval) {
 		select {
 		case daemon.job.Status = <-daemon.statusChan:
 			log.Debugf("Assigning status '%s'", daemon.job.Status)
@@ -58,12 +58,12 @@ func (daemon *Daemon) Start() {
 
 		switch daemon.job.Status {
 		case juggler.StatusWaitingJob, juggler.StatusButtonTimeout:
-			daemon.job.Id = 0
+			daemon.job.ID = 0
 			if err = daemon.ie.nextJob(); err != nil {
 				log.Error(err)
 				break
 			}
-			daemon.job.Id = daemon.ie.job.Id
+			daemon.job.ID = daemon.ie.job.ID
 			daemon.job.Filename = daemon.ie.job.Filename
 			daemon.job.FileContent = daemon.ie.job.FileContent
 			daemon.job.Progress = daemon.ie.job.Progress
@@ -76,8 +76,8 @@ func (daemon *Daemon) Start() {
 			fallthrough
 
 		case juggler.StatusWaitingButton:
-			log.Info("Job ", daemon.job.Id, " is waiting")
-			err = daemon.ie.getJob(daemon.job.Id)
+			log.Info("Job ", daemon.job.ID, " is waiting")
+			err = daemon.ie.getJob(daemon.job.ID)
 			if err != nil {
 				log.Error("Can't get job status from intern: ", err)
 			} else {
@@ -105,7 +105,7 @@ func (daemon *Daemon) Start() {
 
 			log.Info("Sending to printer")
 			log.Debug("FileSize: ", len(daemon.job.FileContent))
-			err := ioutil.WriteFile(daemon.jobfile, []byte(daemon.job.FileContent), 0644)
+			err := os.WriteFile(daemon.jobfile, []byte(daemon.job.FileContent), 0644)
 			if err != nil {
 				log.Error(err)
 				break
@@ -128,9 +128,9 @@ func (daemon *Daemon) Start() {
 			}()
 
 		case juggler.StatusPrinting:
-			log.Infof("Job %d is currently printing", daemon.job.Id)
+			log.Infof("Job %d is currently printing", daemon.job.ID)
 			// Check status from intern
-			err = daemon.ie.getJob(daemon.job.Id)
+			err = daemon.ie.getJob(daemon.job.ID)
 			if err != nil {
 				log.Error("Can't report status to intern: ", err)
 			}
@@ -159,7 +159,7 @@ func (daemon *Daemon) Start() {
 			}
 		case juggler.StatusPaused:
 			daemon.job.FeederStatus = daemon.feeder.Status()
-			log.Infof("Job %d is currently paused", daemon.job.Id)
+			log.Infof("Job %d is currently paused", daemon.job.ID)
 			switch daemon.job.FeederStatus {
 			case gcodefeeder.Printing:
 				daemon.UpdateStatus(juggler.StatusPrinting)
@@ -206,7 +206,7 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 	juggler.SetHeaders(w)
 
 	job := &juggler.Job{
-		Id:        daemon.job.Id,
+		ID:        daemon.job.ID,
 		Owner:     daemon.job.Owner,
 		Filename:  daemon.job.Filename,
 		Progress:  daemon.job.Progress,
@@ -222,7 +222,7 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	fmt.Fprint(w, string(b))
 }
 
 // StartHandler acknowledged start of the job
@@ -278,8 +278,8 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	if daemon.job.Id == 0 {
-		errS := fmt.Sprintf("Ignore cancel, no job scheduled")
+	if daemon.job.ID == 0 {
+		errS := "Ignore cancel, no job scheduled"
 		log.Infof(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
@@ -300,7 +300,7 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 	juggler.SetHeaders(w)
 
 	if daemon.job.Status != juggler.StatusPrinting {
-		errS := fmt.Sprintf("Ignore pause, not printing")
+		errS := "Ignore pause, not printing"
 		log.Infof(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
@@ -319,5 +319,5 @@ func (daemon *Daemon) VersionHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Received version handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
-	fmt.Fprintf(w, gitCommit)
+	fmt.Fprint(w, gitCommit)
 }

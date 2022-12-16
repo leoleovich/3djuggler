@@ -76,12 +76,12 @@ func NewFeeder(deviceName, fileName string) (*Feeder, error) {
 	err := f.connect()
 	if err != nil {
 		f.status = ConnectionFail
-		return nil, errors.New(fmt.Sprintf("failed to connect to %s: %v", deviceName, err))
+		return nil, fmt.Errorf("failed to connect to %s: %w", deviceName, err)
 	}
 	f.status = Ready
 
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		return nil, errors.New(fmt.Sprintf("failed to open %s: %v", fileName, err))
+		return nil, fmt.Errorf("failed to open %s: %w", fileName, err)
 	}
 
 	return &f, nil
@@ -92,13 +92,23 @@ func (f *Feeder) Cancel() {
 	defer f.Unlock()
 	log.Debug("Feeder: Cancel is called")
 	f.cancelFunc()
-	//  turn off temperature
-	f.writer.Write([]byte("M104 S0\n"))
-	// turn off heatbed
-	f.writer.Write([]byte("M140 S0\n"))
-	// turn off fan
-	f.writer.Write([]byte("M107\n"))
-	f.writer.Flush()
+	instructions := []string{
+		//  turn off temperature
+		"M104 S0\n",
+		// turn off heatbed
+		"M140 S0\n",
+		// turn off fan
+		"M107\n",
+	}
+	for _, instruction := range instructions {
+		_, err := f.writer.Write([]byte(instruction))
+		if err != nil {
+			log.Errorf("Feeder: Error writing cancellation instructions: %v", err)
+		}
+	}
+	if err := f.writer.Flush(); err != nil {
+		log.Errorf("Feeder: Error flushing cancellation instructions: %v", err)
+	}
 
 	f.tty.Close()
 	f.status = Finished
@@ -218,8 +228,8 @@ func (f *Feeder) Feed() error {
 	go f.read(ctx)
 
 	// Flush whatever junk is in write buffer
-	f.writer.Write([]byte("\n"))
-	f.writer.Flush()
+	_, _ = f.writer.Write([]byte("\n"))
+	_ = f.writer.Flush()
 	// Be sure we receive initial reset from printer
 	<-f.printerAck
 	f.Start()
