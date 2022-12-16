@@ -64,7 +64,7 @@ func (j *FakeJuggler) reschedule() {
 
 func (j *FakeJuggler) waitForButton() {
 	j.Job.Progress = 0
-	j.Job.Id = 10
+	j.Job.ID = 10
 	j.Job.Status = juggler.StatusWaitingButton
 	j.Job.Fetched = time.Now()
 	j.Job.Scheduled = time.Now().Add(600 * time.Second)
@@ -73,7 +73,7 @@ func (j *FakeJuggler) waitForButton() {
 
 func (j *FakeJuggler) waitForJob() {
 	j.Job.Progress = 0
-	j.Job.Id = 0
+	j.Job.ID = 0
 	j.Job.Status = juggler.StatusWaitingJob
 }
 
@@ -124,7 +124,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			panic(err)
+		}
 	})
 
 	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +142,11 @@ func main() {
 		fmt.Fprintf(w, "12345")
 	})
 
-	go http.ListenAndServe(":8888", nil)
+	go func() {
+		if err := http.ListenAndServe(":8888", nil); err != nil {
+			log.Fatalf("serving HTTP: %v", err)
+		}
+	}()
 
 	reader := bufio.NewReader(os.Stdin)
 	usage()
@@ -165,7 +172,5 @@ func main() {
 			usage()
 		}
 		fmt.Printf("New status: '%s'\n", j.Job.Status)
-
 	}
-
 }

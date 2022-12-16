@@ -6,35 +6,35 @@ import (
 	"fmt"
 	"github.com/leoleovich/3djuggler/juggler"
 	log "github.com/sirupsen/logrus"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 )
 
 var (
 	jobfile                  = "/tmp/job"
-	waitingForButtonInterval = time.Duration(10 * time.Minute)
-	pollingInterval          = time.Duration(5 * time.Second)
+	waitingForButtonInterval = 10 * time.Minute
+	pollingInterval          = 5 * time.Second
 	defaultListen            = "[::1]:8888"
 	defaultSerial            = "/dev/ttyACM0"
 	// Set during compilation to export version via /version http handler
 	gitCommit = ""
 )
 
-type InternEnpoint struct {
-	Api_app     string
-	Api_key     string
-	Api_uri     string
+type InternEndpoint struct {
+	APIApp      string `json:"api_app"`
+	APIKey      string `json:"api_key"`
+	APIURI      string `json:"api_uri"`
+	PrinterName string `json:"printerName"`
+	OfficeName  string `json:"officeName"`
 	job         *juggler.Job
-	PrinterName string
-	OfficeName  string
-	log         *log.Logger
 }
 
 type Config struct {
-	Listen        string
-	Serial        string
-	InternEnpoint *InternEnpoint
+	Listen string
+	Serial string
+	// preserve the typo for backward compatibility
+	InternEndpoint *InternEndpoint `json:"InternEnpoint"`
 }
 
 func main() {
@@ -71,7 +71,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Can't open main config: %v", err)
 	}
-	byteValue, err := ioutil.ReadAll(jsonFile)
+	byteValue, err := io.ReadAll(jsonFile)
 	if err != nil {
 		panic(fmt.Sprintf("Can't open main config: %v", err))
 	}
@@ -80,6 +80,7 @@ func main() {
 		panic(fmt.Sprintf("Can't decode main config: %v", err))
 	}
 	jsonFile.Close()
+	fmt.Printf("config: %+v\n", daemon.config.InternEndpoint)
 
 	if daemon.config.Listen == "" {
 		daemon.config.Listen = defaultListen
@@ -90,13 +91,13 @@ func main() {
 
 	daemon.jobfile = jobfile
 
-	daemon.ie = &InternEnpoint{
-		Api_app: daemon.config.InternEnpoint.Api_app,
-		Api_key: daemon.config.InternEnpoint.Api_key,
-		Api_uri: daemon.config.InternEnpoint.Api_uri,
+	daemon.ie = &InternEndpoint{
+		APIApp: daemon.config.InternEndpoint.APIApp,
+		APIKey: daemon.config.InternEndpoint.APIKey,
+		APIURI: daemon.config.InternEndpoint.APIURI,
 
-		PrinterName: daemon.config.InternEnpoint.PrinterName,
-		OfficeName:  daemon.config.InternEnpoint.OfficeName,
+		PrinterName: daemon.config.InternEndpoint.PrinterName,
+		OfficeName:  daemon.config.InternEndpoint.OfficeName,
 		job:         &juggler.Job{},
 	}
 

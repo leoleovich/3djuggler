@@ -20,7 +20,7 @@ const (
 )
 
 type Job struct {
-	Id           int                `json:"id"`
+	ID           int                `json:"id"`
 	Filename     string             `json:"file_name"`
 	FileContent  string             `json:"file_content"`
 	Owner        string             `json:"owner"`
