@@ -200,20 +200,21 @@ func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
 }
 
 // InfoHandler gives provides with json containing job status and some other important fields
-func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) InfoHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received info handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
 	job := &juggler.Job{
-		ID:        daemon.job.ID,
-		Owner:     daemon.job.Owner,
-		Filename:  daemon.job.Filename,
-		Progress:  daemon.job.Progress,
-		Status:    daemon.job.Status,
-		Color:     daemon.job.Color,
-		Fetched:   daemon.job.Fetched,
-		Scheduled: daemon.job.Scheduled,
+		ID:          daemon.job.ID,
+		Owner:       daemon.job.Owner,
+		Filename:    daemon.job.Filename,
+		Progress:    daemon.job.Progress,
+		Status:      daemon.job.Status,
+		Color:       daemon.job.Color,
+		Fetched:     daemon.job.Fetched,
+		Scheduled:   daemon.job.Scheduled,
+		PrinterName: daemon.config.InternEndpoint.PrinterName,
 	}
 
 	b, err := json.Marshal(job)
@@ -226,7 +227,7 @@ func (daemon *Daemon) InfoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // StartHandler acknowledged start of the job
-func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) StartHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received start handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
@@ -256,7 +257,7 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // RescheduleHandler resets the time when the job will start
-func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received reschedule handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
@@ -273,7 +274,7 @@ func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // CancelHandler cancels job execution
-func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) CancelHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received cancel handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
@@ -294,7 +295,7 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // CancelHandler cancels job execution
-func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) PauseHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received pause handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
@@ -315,7 +316,7 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // VersionHandler cancels job execution
-func (daemon *Daemon) VersionHandler(w http.ResponseWriter, r *http.Request) {
+func (daemon *Daemon) VersionHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received version handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)

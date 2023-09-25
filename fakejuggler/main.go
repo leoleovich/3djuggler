@@ -94,9 +94,10 @@ func (j *FakeJuggler) pause() {
 
 func main() {
 	job := juggler.Job{
-		Status:   juggler.StatusWaitingJob,
-		Owner:    "user",
-		Filename: "some_file.gcode",
+		Status:      juggler.StatusWaitingJob,
+		Owner:       "user",
+		Filename:    "some_file.gcode",
+		PrinterName: "test printer",
 	}
 	j := FakeJuggler{Job: &job}
 

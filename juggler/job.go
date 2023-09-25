@@ -30,4 +30,5 @@ type Job struct {
 	Fetched      time.Time          `json:"fetched"`
 	Scheduled    time.Time          `json:"scheduled"`
 	FeederStatus gcodefeeder.Status `json:"-"`
+	PrinterName  string             `json:"printer_name"`
 }
