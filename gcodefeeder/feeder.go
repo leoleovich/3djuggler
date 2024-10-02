@@ -91,7 +91,8 @@ func (f *Feeder) Cancel() {
 	f.Lock()
 	defer f.Unlock()
 	log.Debug("Feeder: Cancel is called")
-	f.cancelFunc()
+	// Feed, read and write function will terminate when context is cancelled
+	defer f.cancelFunc()
 	instructions := []string{
 		//  turn off temperature
 		"M104 S0\n",
@@ -162,14 +163,11 @@ func (f *Feeder) read(ctx context.Context) {
 					continue
 				}
 				f.status = MMUBusy
-			} else if strings.Contains(bufStr, "start") {
-				// Often "start" comes from MMU, filament sensor etc:
-				// msg="READING:MMU => 'start'"
-				// msg="READING:fsensor_oq_meassure_start"
-				// But the "important" initial start always comes with nothing extra.
-				// Though sometimes it has an old junk (thanks buffered I/O):
-				// msg="READING:\x1bstart"
-				// But still as "Suffix"
+			} else if strings.Contains(bufStr, "start") || strings.Contains(bufStr, "facebook") {
+				// When serial connection is established:
+				// Prusa MK3 returns "start"
+				// Prusa MK4 (Firmware Buddy) returns "facebook"
+				// We consider this event as "ready to print"
 				//
 				// If the first "start" is given - it says printer is ready
 				// If the second "start" is given - somebody reset the printer
@@ -178,6 +176,8 @@ func (f *Feeder) read(ctx context.Context) {
 					seenStart = true
 					f.printerAck <- true
 				} else if seenStart && strings.HasSuffix(bufStr, "start") {
+					// This is most likely a reset button press
+					// TODO: figure out what happens with mk4
 					log.Warning("Feeder: Second 'start' sequence")
 					return
 				}
@@ -229,6 +229,8 @@ func (f *Feeder) Feed() error {
 
 	// Flush whatever junk is in write buffer
 	_, _ = f.writer.Write([]byte("\n"))
+	// Issue a "firmware buddy" specific command to differentiate between mk3 and mk4
+	_, _ = f.writer.Write([]byte("M118 facebook\n"))
 	_ = f.writer.Flush()
 	// Be sure we receive initial reset from printer
 	<-f.printerAck

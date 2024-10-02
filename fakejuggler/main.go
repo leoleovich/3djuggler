@@ -101,25 +101,25 @@ func main() {
 	}
 	j := FakeJuggler{Job: &job}
 
-	http.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/cancel", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		log.Println("cancel")
 		j.cancel()
 	})
 
-	http.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/start", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		log.Println("start")
 		j.start()
 	})
 
-	http.HandleFunc("/reschedule", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/reschedule", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		log.Println("reschedule")
 		j.reschedule()
 	})
 
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/info", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		b, err := json.Marshal(j.Job)
 		if err != nil {
@@ -131,13 +131,13 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/pause", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		log.Println("pause")
 		j.pause()
 	})
 
-	http.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
 		juggler.SetHeaders(w)
 		log.Println("version")
 		fmt.Fprintf(w, "12345")
