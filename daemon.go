@@ -252,7 +252,7 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.job.Status)
-	log.Infof(errS)
+	log.Info(errS)
 	http.Error(w, errS, http.StatusBadRequest)
 }
 
@@ -264,7 +264,7 @@ func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, _ *http.Request) 
 
 	if daemon.job.Status != juggler.StatusWaitingButton {
 		errS := fmt.Sprintf("Ignore reschedule in '%v' status", daemon.job.Status)
-		log.Infof(errS)
+		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
@@ -281,7 +281,7 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, _ *http.Request) {
 
 	if daemon.job.ID == 0 {
 		errS := "Ignore cancel, no job scheduled"
-		log.Infof(errS)
+		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
@@ -302,7 +302,7 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, _ *http.Request) {
 
 	if daemon.job.Status != juggler.StatusPrinting {
 		errS := "Ignore pause, not printing"
-		log.Infof(errS)
+		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
