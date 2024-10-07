@@ -163,10 +163,10 @@ func (f *Feeder) read(ctx context.Context) {
 					continue
 				}
 				f.status = MMUBusy
-			} else if strings.Contains(bufStr, "start") || strings.Contains(bufStr, "facebook") {
+			} else if strings.Contains(bufStr, "start") {
 				// When serial connection is established:
 				// Prusa MK3 returns "start"
-				// Prusa MK4 (Firmware Buddy) returns "facebook"
+				// Prusa MK4 (Firmware Buddy) returns "start"
 				// We consider this event as "ready to print"
 				//
 				// If the first "start" is given - it says printer is ready
@@ -176,8 +176,7 @@ func (f *Feeder) read(ctx context.Context) {
 					seenStart = true
 					f.printerAck <- true
 				} else if seenStart && strings.HasSuffix(bufStr, "start") {
-					// This is most likely a reset button press
-					// TODO: figure out what happens with mk4
+					// This is most likely a reset button press on MK3
 					log.Warning("Feeder: Second 'start' sequence")
 					return
 				}
@@ -230,7 +229,7 @@ func (f *Feeder) Feed() error {
 	// Flush whatever junk is in write buffer
 	_, _ = f.writer.Write([]byte("\n"))
 	// Issue a "firmware buddy" specific command to differentiate between mk3 and mk4
-	_, _ = f.writer.Write([]byte("M118 facebook\n"))
+	_, _ = f.writer.Write([]byte("M118 start\n"))
 	_ = f.writer.Flush()
 	// Be sure we receive initial reset from printer
 	<-f.printerAck
