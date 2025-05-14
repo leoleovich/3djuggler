@@ -163,10 +163,10 @@ func (f *Feeder) read(ctx context.Context) {
 					continue
 				}
 				f.status = MMUBusy
-			} else if strings.Contains(bufStr, "start") {
+			} else if strings.Contains(bufStr, "start") || strings.Contains(bufStr, "facebook") {
 				// When serial connection is established:
 				// Prusa MK3 returns "start"
-				// Prusa MK4 (Firmware Buddy) returns "start"
+				// Prusa MK4 (Firmware Buddy) returns "facebook"
 				// We consider this event as "ready to print"
 				//
 				// If the first "start" is given - it says printer is ready
@@ -176,7 +176,8 @@ func (f *Feeder) read(ctx context.Context) {
 					seenStart = true
 					f.printerAck <- true
 				} else if seenStart && strings.HasSuffix(bufStr, "start") {
-					// This is most likely a reset button press on MK3
+					// This is most likely a reset button press
+					// TODO: figure out what happens with mk4
 					log.Warning("Feeder: Second 'start' sequence")
 					return
 				}
@@ -229,7 +230,7 @@ func (f *Feeder) Feed() error {
 	// Flush whatever junk is in write buffer
 	_, _ = f.writer.Write([]byte("\n"))
 	// Issue a "firmware buddy" specific command to differentiate between mk3 and mk4
-	_, _ = f.writer.Write([]byte("M118 start\n"))
+	_, _ = f.writer.Write([]byte("M118 facebook\n"))
 	_ = f.writer.Flush()
 	// Be sure we receive initial reset from printer
 	<-f.printerAck
@@ -266,9 +267,44 @@ func (f *Feeder) Feed() error {
 }
 
 func (f *Feeder) Pause() {
+	f.Lock()
+	defer f.Unlock()
+	log.Debug("Feeder: Pause is called")
+	instructions := []string{
+		//  pause
+		"M601\n",
+	}
+	for _, instruction := range instructions {
+		_, err := f.writer.Write([]byte(instruction))
+		if err != nil {
+			log.Errorf("Feeder: Error writing pause instructions: %v", err)
+		}
+	}
+	if err := f.writer.Flush(); err != nil {
+		log.Errorf("Feeder: Error flushing pause instructions: %v", err)
+	}
 	f.status = ManuallyPaused
 }
 
 func (f *Feeder) Start() {
+	// check if status was paused to resume
+	if f.status == ManuallyPaused {
+		f.Lock()
+		defer f.Unlock()
+		log.Debug("Feeder: Resume is called")
+		instructions := []string{
+			//  resume
+			"M602\n",
+		}
+		for _, instruction := range instructions {
+			_, err := f.writer.Write([]byte(instruction))
+			if err != nil {
+				log.Errorf("Feeder: Error writing resume instructions: %v", err)
+			}
+		}
+		if err := f.writer.Flush(); err != nil {
+			log.Errorf("Feeder: Error flushing resume instructions: %v", err)
+		}
+	}
 	f.status = Printing
 }
