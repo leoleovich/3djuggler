@@ -294,7 +294,7 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// PauseHandler pauses job execution
+// CancelHandler cancels job execution
 func (daemon *Daemon) PauseHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received pause handler request")
 	// Add headers to allow AJAX
