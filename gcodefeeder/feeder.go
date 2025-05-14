@@ -271,7 +271,7 @@ func (f *Feeder) Pause() {
 	log.Debug("Feeder: Pause is called")
 	instructions := []string{
 		//  pause
-		"M601\n",		
+		"M601\n",
 	}
 	for _, instruction := range instructions {
 		_, err := f.writer.Write([]byte(instruction))
@@ -293,7 +293,7 @@ func (f *Feeder) Start() {
 		log.Debug("Feeder: Resume is called")
 		instructions := []string{
 			//  resume
-			"M602\n",		
+			"M602\n",
 		}
 		for _, instruction := range instructions {
 			_, err := f.writer.Write([]byte(instruction))
