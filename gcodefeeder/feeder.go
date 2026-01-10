@@ -254,9 +254,44 @@ func (f *Feeder) Feed() error {
 }
 
 func (f *Feeder) Pause() {
+	f.Lock()
+	defer f.Unlock()
+	log.Debug("Feeder: Pause is called")
+	instructions := []string{
+		//  pause
+		"M601\n",
+	}
+	for _, instruction := range instructions {
+		_, err := f.writer.Write([]byte(instruction))
+		if err != nil {
+			log.Errorf("Feeder: Error writing pause instructions: %v", err)
+		}
+	}
+	if err := f.writer.Flush(); err != nil {
+		log.Errorf("Feeder: Error flushing pause instructions: %v", err)
+	}
 	f.status = ManuallyPaused
 }
 
 func (f *Feeder) Start() {
+	// check if status was paused to resume
+	if f.status == ManuallyPaused {
+		f.Lock()
+		defer f.Unlock()
+		log.Debug("Feeder: Resume is called")
+		instructions := []string{
+			//  resume
+			"M602\n",
+		}
+		for _, instruction := range instructions {
+			_, err := f.writer.Write([]byte(instruction))
+			if err != nil {
+				log.Errorf("Feeder: Error writing resume instructions: %v", err)
+			}
+		}
+		if err := f.writer.Flush(); err != nil {
+			log.Errorf("Feeder: Error flushing resume instructions: %v", err)
+		}
+	}
 	f.status = Printing
 }
