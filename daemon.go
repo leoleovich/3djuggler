@@ -235,15 +235,6 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, _ *http.Request) {
 			time.Sleep(1 * time.Second)
 		}
 		return
-	case juggler.StatusPaused:
-		// Unpause
-		daemon.feeder.Start()
-		daemon.UpdateStatus(juggler.StatusPrinting)
-		for daemon.job.Status != juggler.StatusPrinting {
-			log.Infof("Waiting for %s status to be set", juggler.StatusPrinting)
-			time.Sleep(1 * time.Second)
-		}
-		return
 	}
 
 	errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.job.Status)

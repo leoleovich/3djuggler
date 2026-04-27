@@ -233,20 +233,13 @@ func (f *Feeder) Feed() error {
 	scanner := bufio.NewScanner(f.gcode)
 	for scanner.Scan() {
 		line := scanner.Text()
-		for f.status == ManuallyPaused {
-			select {
-			case <-ctx.Done():
-				return errors.New("context is Done")
-			default:
-				time.Sleep(5 * time.Second)
-				log.Info("Feeder: paused manually")
-			}
-		}
-		f.status = Printing
 		err := f.write(ctx, line)
 		if err != nil {
 			f.status = Error
 			return err
+		}
+		if f.status == ManuallyPaused {
+			f.status = Printing
 		}
 	}
 	f.status = Finished
@@ -254,7 +247,19 @@ func (f *Feeder) Feed() error {
 }
 
 func (f *Feeder) Pause() {
+	f.Lock()
+	defer f.Unlock()
+
 	f.status = ManuallyPaused
+
+	_, err := f.writer.Write([]byte("M601\n"))
+	if err != nil {
+		log.Errorf("Feeder: Error writing pause command: %v", err)
+		return
+	}
+	if err := f.writer.Flush(); err != nil {
+		log.Errorf("Feeder: Error flushing pause command: %v", err)
+	}
 }
 
 func (f *Feeder) Start() {
