@@ -20,9 +20,12 @@ const (
 )
 
 type Job struct {
-	ID           int                `json:"id"`
-	Filename     string             `json:"file_name"`
-	FileContent  string             `json:"file_content"`
+	ID       int    `json:"id"`
+	Filename string `json:"file_name"`
+	// FileContent is populated when fetching a job from the intern endpoint.
+	// omitempty keeps it off the wire in the /info response, which must never
+	// serve the gcode body.
+	FileContent  string             `json:"file_content,omitempty"`
 	Owner        string             `json:"owner"`
 	Status       JobStatus          `json:"status"`
 	Color        string             `json:"color"`
