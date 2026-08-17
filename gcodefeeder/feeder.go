@@ -1,3 +1,13 @@
+// Package gcodefeeder streams G-code to a 3D printer over a serial
+// connection.
+//
+// The printer is driven one instruction at a time: each line is written and
+// the feeder then waits for the printer to acknowledge it before sending the
+// next. A command becomes acknowledgeable only once its bytes have been
+// flushed, so an unsolicited "ok" cannot be mistaken for the reply to a
+// command that is still being prepared.
+//
+// It has been tested against Prusa MK3/MK3S (including MMU2) and MK4.
 package gcodefeeder
 
 import (
@@ -16,6 +26,8 @@ import (
 	"go.bug.st/serial"
 )
 
+// Status describes where a feed has got to, from connecting through to
+// finished or failed.
 type Status int
 
 const (
@@ -66,6 +78,8 @@ var progressRegexp = regexp.MustCompile(`^M73 P([0-9]+)`)
 // commentRegexp strips gcode comments, which start at the first ';'.
 var commentRegexp = regexp.MustCompile(";.*")
 
+// Feeder streams G-code to a single printer. It is safe to query from other
+// goroutines while Feed is running.
 type Feeder struct {
 	deviceName string
 	gcode      io.Reader
@@ -202,12 +216,15 @@ func (f *Feeder) Cancel() {
 	}
 }
 
+// Progress returns the last percentage reported by the G-code itself, via
+// M73 progress comments. It is 0 for G-code sliced without them.
 func (f *Feeder) Progress() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.progress
 }
 
+// Status returns the current state of the feed.
 func (f *Feeder) Status() Status {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -568,10 +585,13 @@ func (f *Feeder) Feed() error {
 	return nil
 }
 
+// Pause halts the feed after the current instruction. The connection stays
+// open and the printer keeps its heaters on; call Start to resume.
 func (f *Feeder) Pause() {
 	f.setStatus(ManuallyPaused)
 }
 
+// Start begins the feed, and resumes it after Pause.
 func (f *Feeder) Start() {
 	f.setStatus(Printing)
 }
