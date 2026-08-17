@@ -77,7 +77,10 @@ func (daemon *Daemon) registerHandlers(mux *http.ServeMux) {
 
 func (daemon *Daemon) Start() {
 	var err error
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	if daemon.config.Insecure {
+		log.Warning("TLS certificate verification is DISABLED (-insecure)")
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402 -- opt-in via -insecure flag
+	}
 
 	mux := http.NewServeMux()
 	daemon.registerHandlers(mux)

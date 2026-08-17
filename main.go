@@ -40,6 +40,9 @@ func (ie *InternEndpoint) String() string {
 type Config struct {
 	Listen string
 	Serial string
+	// Insecure disables TLS certificate verification. Set by the -insecure
+	// flag, not by the config file.
+	Insecure bool `json:"-"`
 	// preserve the typo for backward compatibility
 	InternEndpoint *InternEndpoint `json:"InternEnpoint"`
 }
@@ -89,11 +92,12 @@ func loadConfig(path string) (*Config, error) {
 
 func main() {
 	var configFile, logFile string
-	var verbose bool
+	var verbose, insecure bool
 
 	flag.StringVar(&configFile, "config", "3djuggler.json", "Main config")
 	flag.StringVar(&logFile, "log", "/var/log/3djuggler.log", "Where to log")
 	flag.BoolVar(&verbose, "verbose", false, "Use verbose log output")
+	flag.BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification (development only)")
 	flag.Parse()
 
 	if verbose {
@@ -114,6 +118,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	config.Insecure = insecure
 	log.Infof("config: %v", config.InternEndpoint)
 
 	daemon := &Daemon{
