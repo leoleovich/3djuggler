@@ -3,9 +3,11 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/leoleovich/3djuggler/gcodefeeder"
@@ -13,24 +15,78 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// statusChangeTimeout bounds how long a handler waits for the polling loop to
+// pick up a requested status change before giving up.
+var statusChangeTimeout = 30 * time.Second
+
+// statusPollInterval is how often a handler re-checks for the status change.
+var statusPollInterval = 100 * time.Millisecond
+
 type Daemon struct {
 	config     *Config
-	job        *juggler.Job
 	ie         *InternEndpoint
-	feeder     *gcodefeeder.Feeder
 	statusChan chan juggler.JobStatus
+
+	// mu guards job and feeder, which are read by HTTP handlers while the
+	// polling loop writes them.
+	mu     sync.RWMutex
+	job    *juggler.Job
+	feeder *gcodefeeder.Feeder
+}
+
+// jobSnapshot returns a copy of the current job, safe to read outside the lock.
+func (daemon *Daemon) jobSnapshot() juggler.Job {
+	daemon.mu.RLock()
+	defer daemon.mu.RUnlock()
+	return *daemon.job
+}
+
+func (daemon *Daemon) jobStatus() juggler.JobStatus {
+	daemon.mu.RLock()
+	defer daemon.mu.RUnlock()
+	return daemon.job.Status
+}
+
+func (daemon *Daemon) currentFeeder() *gcodefeeder.Feeder {
+	daemon.mu.RLock()
+	defer daemon.mu.RUnlock()
+	return daemon.feeder
+}
+
+func (daemon *Daemon) setFeeder(f *gcodefeeder.Feeder) {
+	daemon.mu.Lock()
+	defer daemon.mu.Unlock()
+	daemon.feeder = f
+}
+
+// mutateJob applies fn to the job under the write lock.
+func (daemon *Daemon) mutateJob(fn func(*juggler.Job)) {
+	daemon.mu.Lock()
+	defer daemon.mu.Unlock()
+	fn(daemon.job)
+}
+
+func (daemon *Daemon) registerHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/info", daemon.InfoHandler)
+	mux.HandleFunc("/start", daemon.StartHandler)
+	mux.HandleFunc("/pause", daemon.PauseHandler)
+	mux.HandleFunc("/reschedule", daemon.RescheduleHandler)
+	mux.HandleFunc("/cancel", daemon.CancelHandler)
+	mux.HandleFunc("/version", daemon.VersionHandler)
 }
 
 func (daemon *Daemon) Start() {
 	var err error
 	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	http.HandleFunc("/info", daemon.InfoHandler)
-	http.HandleFunc("/start", daemon.StartHandler)
-	http.HandleFunc("/pause", daemon.PauseHandler)
-	http.HandleFunc("/reschedule", daemon.RescheduleHandler)
-	http.HandleFunc("/cancel", daemon.CancelHandler)
-	http.HandleFunc("/version", daemon.VersionHandler)
-	go func() { log.Fatal(http.ListenAndServe(daemon.config.Listen, nil)) }()
+
+	mux := http.NewServeMux()
+	daemon.registerHandlers(mux)
+	server := &http.Server{
+		Addr:              daemon.config.Listen,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() { log.Fatal(server.ListenAndServe()) }()
 	log.Debug("Started http server on ", daemon.config.Listen)
 
 	daemon.statusChan = make(chan juggler.JobStatus, 10)
@@ -41,42 +97,52 @@ func (daemon *Daemon) Start() {
 	}
 	for range time.Tick(pollingInterval) {
 		select {
-		case daemon.job.Status = <-daemon.statusChan:
-			log.Debugf("Assigning status '%s'", daemon.job.Status)
-			if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
+		case status := <-daemon.statusChan:
+			daemon.mutateJob(func(j *juggler.Job) { j.Status = status })
+			log.Debugf("Assigning status '%s'", status)
+			job := daemon.jobSnapshot()
+			if err := daemon.ie.reportJobStatusChange(&job); err != nil {
 				log.Error("Can't report it to intern: ", err)
 			}
 		default:
 			log.Debug("No status updates")
 		}
-		log.Infof("My status is: '%s'", daemon.job.Status)
+		log.Infof("My status is: '%s'", daemon.jobStatus())
 
 		if err = daemon.ie.reportStat(); err != nil {
 			log.Error(err)
 		}
 
-		switch daemon.job.Status {
+		switch daemon.jobStatus() {
 		case juggler.StatusWaitingJob, juggler.StatusButtonTimeout:
-			daemon.job.ID = 0
+			daemon.mutateJob(func(j *juggler.Job) { j.ID = 0 })
 			if err = daemon.ie.nextJob(); err != nil {
-				log.Error(err)
+				// An empty queue is the normal case, not an error.
+				if errors.Is(err, ErrNothingToPrint) {
+					log.Debug("Nothing to print")
+				} else {
+					log.Error(err)
+				}
 				break
 			}
-			daemon.job.ID = daemon.ie.job.ID
-			daemon.job.Filename = daemon.ie.job.Filename
-			daemon.job.FileContent = daemon.ie.job.FileContent
-			daemon.job.Progress = daemon.ie.job.Progress
-			daemon.job.Owner = daemon.ie.job.Owner
-			daemon.job.Color = daemon.ie.job.Color
-			daemon.job.Fetched = time.Now()
-			daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
+			daemon.mutateJob(func(j *juggler.Job) {
+				j.ID = daemon.ie.job.ID
+				j.Filename = daemon.ie.job.Filename
+				j.FileContent = daemon.ie.job.FileContent
+				j.Progress = daemon.ie.job.Progress
+				j.Owner = daemon.ie.job.Owner
+				j.Color = daemon.ie.job.Color
+				j.Fetched = time.Now()
+				j.Scheduled = time.Now().Add(waitingForButtonInterval)
+			})
 
 			daemon.UpdateStatus(juggler.StatusWaitingButton)
 			fallthrough
 
 		case juggler.StatusWaitingButton:
-			log.Info("Job ", daemon.job.ID, " is waiting")
-			err = daemon.ie.getJob(daemon.job.ID)
+			job := daemon.jobSnapshot()
+			log.Info("Job ", job.ID, " is waiting")
+			err = daemon.ie.getJob(job.ID)
 			if err != nil {
 				log.Error("Can't get job status from intern: ", err)
 			} else {
@@ -88,43 +154,49 @@ func (daemon *Daemon) Start() {
 				break
 			}
 
-			if daemon.job.Scheduled.After(time.Now()) {
-				log.Info("Waiting ", daemon.job.Scheduled.Unix()-time.Now().Unix(), " more seconds for somebody to press the button")
+			if job.Scheduled.After(time.Now()) {
+				log.Info("Waiting ", int(time.Until(job.Scheduled).Seconds()), " more seconds for somebody to press the button")
 			} else {
 				log.Warning("Nobody pressed the button on time")
-				log.Warning("Timeout while waiting for a job. Switching back to ", daemon.job.Status)
+				log.Warning("Timeout while waiting for a job. Switching back to ", job.Status)
 				daemon.UpdateStatus(juggler.StatusButtonTimeout)
 			}
 
 		case juggler.StatusSending:
 			if oldStatus != juggler.StatusWaitingButton && oldStatus != juggler.StatusPaused {
-				log.Warningf("Forbidden status change sequence, from %s to %s. Ignoring", oldStatus, daemon.job.Status)
+				log.Warningf("Forbidden status change sequence, from %s to %s. Ignoring", oldStatus, daemon.jobStatus())
 				continue
 			}
 
+			job := daemon.jobSnapshot()
 			log.Info("Sending to printer")
-			log.Debug("FileSize: ", len(daemon.job.FileContent))
+			log.Debug("FileSize: ", len(job.FileContent))
 
-			daemon.feeder, err = gcodefeeder.NewFeeder(
+			feeder, ferr := gcodefeeder.NewFeeder(
 				daemon.config.Serial,
-				strings.NewReader(daemon.job.FileContent),
+				strings.NewReader(job.FileContent),
 			)
-			if err != nil {
-				log.Error("Failed to create Feeder: ", err)
+			if ferr != nil {
+				log.Error("Failed to create Feeder: ", ferr)
+				// Without a feeder the job can never print. Tell intern
+				// instead of silently retrying forever.
+				daemon.UpdateStatus(juggler.StatusCancelling)
 				break
 			}
+			daemon.setFeeder(feeder)
 			daemon.UpdateStatus(juggler.StatusPrinting)
 
 			go func() {
-				if err = daemon.feeder.Feed(); err != nil {
+				if err := feeder.Feed(); err != nil {
 					log.Error(err)
 				}
 			}()
 
 		case juggler.StatusPrinting:
-			log.Infof("Job %d is currently printing", daemon.job.ID)
+			job := daemon.jobSnapshot()
+			log.Infof("Job %d is currently printing", job.ID)
 			// Check status from intern
-			err = daemon.ie.getJob(daemon.job.ID)
+			err = daemon.ie.getJob(job.ID)
 			if err != nil {
 				log.Error("Can't report status to intern: ", err)
 			}
@@ -133,13 +205,24 @@ func (daemon *Daemon) Start() {
 				daemon.UpdateStatus(juggler.StatusCancelling)
 				break
 			}
-			daemon.job.Progress = float64(daemon.feeder.Progress())
-			daemon.job.FeederStatus = daemon.feeder.Status()
+			feeder := daemon.currentFeeder()
+			if feeder == nil {
+				log.Error("Printing without a feeder, cancelling")
+				daemon.UpdateStatus(juggler.StatusCancelling)
+				break
+			}
+			feederStatus := feeder.Status()
+			progress := float64(feeder.Progress())
+			daemon.mutateJob(func(j *juggler.Job) {
+				j.Progress = progress
+				j.FeederStatus = feederStatus
+			})
 
-			switch daemon.job.FeederStatus {
+			switch feederStatus {
 			case gcodefeeder.Printing:
 				// We need to update percentage of print
-				if err := daemon.ie.reportJobStatusChange(daemon.job); err != nil {
+				snapshot := daemon.jobSnapshot()
+				if err := daemon.ie.reportJobStatusChange(&snapshot); err != nil {
 					log.Error("Can't report it to intern: ", err)
 				}
 			case gcodefeeder.Finished:
@@ -149,38 +232,33 @@ func (daemon *Daemon) Start() {
 			case gcodefeeder.ManuallyPaused, gcodefeeder.FSensorBusy, gcodefeeder.MMUBusy:
 				daemon.UpdateStatus(juggler.StatusPaused)
 			default:
-				log.Warning("Printing. Feeder status is: ", daemon.feeder.Status())
+				log.Warning("Printing. Feeder status is: ", feederStatus)
 			}
 		case juggler.StatusPaused:
-			daemon.job.FeederStatus = daemon.feeder.Status()
-			log.Infof("Job %d is currently paused", daemon.job.ID)
-			switch daemon.job.FeederStatus {
+			feeder := daemon.currentFeeder()
+			if feeder == nil {
+				log.Error("Paused without a feeder, cancelling")
+				daemon.UpdateStatus(juggler.StatusCancelling)
+				break
+			}
+			feederStatus := feeder.Status()
+			daemon.mutateJob(func(j *juggler.Job) { j.FeederStatus = feederStatus })
+			log.Infof("Job %d is currently paused", daemon.jobSnapshot().ID)
+			switch feederStatus {
 			case gcodefeeder.Printing:
 				daemon.UpdateStatus(juggler.StatusPrinting)
 			case gcodefeeder.Error:
 				daemon.UpdateStatus(juggler.StatusCancelling)
 			default:
-				log.Warning("Paused. Feeder status is: ", daemon.feeder.Status())
+				log.Warning("Paused. Feeder status is: ", feederStatus)
 			}
-		case juggler.StatusCancelling:
-			fallthrough
-		case juggler.StatusFinished:
-			if daemon.feeder != nil && daemon.feeder.Status() != gcodefeeder.Finished {
-				log.Info("Stopping feeder")
-				daemon.feeder.Cancel()
-			}
-
-			log.Info("Deleting from intern")
-			err = daemon.ie.deleteJob(daemon.job)
-			if err != nil {
-				log.Error(err)
-			}
-			daemon.UpdateStatus(juggler.StatusWaitingJob)
+		case juggler.StatusCancelling, juggler.StatusFinished:
+			daemon.finishJob()
 		default:
-			log.Error("Job ", daemon.job, " is in a weird state")
+			log.Error("Job ", daemon.jobSnapshot(), " is in a weird state")
 		}
 
-		oldStatus = daemon.job.Status
+		oldStatus = daemon.jobStatus()
 	}
 }
 
@@ -193,21 +271,60 @@ func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
 	}
 }
 
+// finishJob runs the terminal state: stop the feeder, delete the job from
+// intern, and only then allow the daemon to look for more work. It is a
+// method so the "do not advance on a failed delete" rule can be tested
+// without driving the whole polling loop.
+func (daemon *Daemon) finishJob() {
+	if feeder := daemon.currentFeeder(); feeder != nil && feeder.Status() != gcodefeeder.Finished {
+		log.Info("Stopping feeder")
+		feeder.Cancel()
+	}
+
+	log.Info("Deleting from intern")
+	job := daemon.jobSnapshot()
+	if err := daemon.ie.deleteJob(&job); err != nil {
+		// Do not advance. The backend may still hold this job, and fetching
+		// again from WaitingJob would print it a second time. Stay in the
+		// terminal state and retry on the next tick.
+		log.Errorf("Failed to delete job %d, will retry: %v", job.ID, err)
+		return
+	}
+	daemon.setFeeder(nil)
+	daemon.UpdateStatus(juggler.StatusWaitingJob)
+}
+
+// awaitStatus blocks until the polling loop has applied the expected status,
+// or the timeout expires. Returns false on timeout.
+func (daemon *Daemon) awaitStatus(expected juggler.JobStatus) bool {
+	deadline := time.Now().Add(statusChangeTimeout)
+	for time.Now().Before(deadline) {
+		if daemon.jobStatus() == expected {
+			return true
+		}
+		log.Infof("Waiting for %s status to be set", expected)
+		time.Sleep(statusPollInterval)
+	}
+	log.Errorf("Timed out waiting for status %s", expected)
+	return false
+}
+
 // InfoHandler gives provides with json containing job status and some other important fields
 func (daemon *Daemon) InfoHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received info handler request")
 	// Add headers to allow AJAX
-	juggler.SetHeaders(w)
+	juggler.SetJSONHeaders(w)
 
+	current := daemon.jobSnapshot()
 	job := &juggler.Job{
-		ID:          daemon.job.ID,
-		Owner:       daemon.job.Owner,
-		Filename:    daemon.job.Filename,
-		Progress:    daemon.job.Progress,
-		Status:      daemon.job.Status,
-		Color:       daemon.job.Color,
-		Fetched:     daemon.job.Fetched,
-		Scheduled:   daemon.job.Scheduled,
+		ID:          current.ID,
+		Owner:       current.Owner,
+		Filename:    current.Filename,
+		Progress:    current.Progress,
+		Status:      current.Status,
+		Color:       current.Color,
+		Fetched:     current.Fetched,
+		Scheduled:   current.Scheduled,
 		PrinterName: daemon.config.InternEndpoint.PrinterName,
 	}
 
@@ -226,27 +343,30 @@ func (daemon *Daemon) StartHandler(w http.ResponseWriter, _ *http.Request) {
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	switch daemon.job.Status {
+	switch daemon.jobStatus() {
 	case juggler.StatusWaitingButton:
 		// Initial start
 		daemon.UpdateStatus(juggler.StatusSending)
-		for daemon.job.Status != juggler.StatusSending {
-			log.Infof("Waiting for %s status to be set", juggler.StatusSending)
-			time.Sleep(1 * time.Second)
+		if !daemon.awaitStatus(juggler.StatusSending) {
+			http.Error(w, "timed out waiting for job to start", http.StatusServiceUnavailable)
 		}
 		return
 	case juggler.StatusPaused:
 		// Unpause
-		daemon.feeder.Start()
+		feeder := daemon.currentFeeder()
+		if feeder == nil {
+			http.Error(w, "no active print to resume", http.StatusConflict)
+			return
+		}
+		feeder.Start()
 		daemon.UpdateStatus(juggler.StatusPrinting)
-		for daemon.job.Status != juggler.StatusPrinting {
-			log.Infof("Waiting for %s status to be set", juggler.StatusPrinting)
-			time.Sleep(1 * time.Second)
+		if !daemon.awaitStatus(juggler.StatusPrinting) {
+			http.Error(w, "timed out waiting for job to resume", http.StatusServiceUnavailable)
 		}
 		return
 	}
 
-	errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.job.Status)
+	errS := fmt.Sprintf("Ignore buttonpress in '%v' status", daemon.jobStatus())
 	log.Info(errS)
 	http.Error(w, errS, http.StatusBadRequest)
 }
@@ -257,15 +377,17 @@ func (daemon *Daemon) RescheduleHandler(w http.ResponseWriter, _ *http.Request) 
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	if daemon.job.Status != juggler.StatusWaitingButton {
-		errS := fmt.Sprintf("Ignore reschedule in '%v' status", daemon.job.Status)
+	if daemon.jobStatus() != juggler.StatusWaitingButton {
+		errS := fmt.Sprintf("Ignore reschedule in '%v' status", daemon.jobStatus())
 		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
 
-	daemon.job.Fetched = time.Now()
-	daemon.job.Scheduled = time.Now().Add(waitingForButtonInterval)
+	daemon.mutateJob(func(j *juggler.Job) {
+		j.Fetched = time.Now()
+		j.Scheduled = time.Now().Add(waitingForButtonInterval)
+	})
 }
 
 // CancelHandler cancels job execution
@@ -274,46 +396,69 @@ func (daemon *Daemon) CancelHandler(w http.ResponseWriter, _ *http.Request) {
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	if daemon.job.ID == 0 {
+	if daemon.jobSnapshot().ID == 0 {
 		errS := "Ignore cancel, no job scheduled"
 		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
 
-	daemon.job.Scheduled = time.Time{}
+	daemon.mutateJob(func(j *juggler.Job) { j.Scheduled = time.Time{} })
 	daemon.UpdateStatus(juggler.StatusCancelling)
-	for daemon.job.Status != juggler.StatusCancelling {
-		log.Infof("Waiting for %s status to be set", juggler.StatusCancelling)
-		time.Sleep(1 * time.Second)
+	// The loop moves from Cancelling to WaitingJob on its own, so either
+	// state means the cancel was accepted.
+	if !daemon.awaitStatusAny(juggler.StatusCancelling, juggler.StatusWaitingJob) {
+		http.Error(w, "timed out waiting for job to cancel", http.StatusServiceUnavailable)
 	}
 }
 
-// CancelHandler cancels job execution
+// awaitStatusAny blocks until the job reaches any of the expected statuses.
+func (daemon *Daemon) awaitStatusAny(expected ...juggler.JobStatus) bool {
+	deadline := time.Now().Add(statusChangeTimeout)
+	for time.Now().Before(deadline) {
+		current := daemon.jobStatus()
+		for _, e := range expected {
+			if current == e {
+				return true
+			}
+		}
+		log.Infof("Waiting for one of %v status to be set", expected)
+		time.Sleep(statusPollInterval)
+	}
+	log.Errorf("Timed out waiting for any of statuses %v", expected)
+	return false
+}
+
+// PauseHandler pauses job execution
 func (daemon *Daemon) PauseHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received pause handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 
-	if daemon.job.Status != juggler.StatusPrinting {
+	if daemon.jobStatus() != juggler.StatusPrinting {
 		errS := "Ignore pause, not printing"
 		log.Info(errS)
 		http.Error(w, errS, http.StatusBadRequest)
 		return
 	}
 
-	daemon.feeder.Pause()
+	feeder := daemon.currentFeeder()
+	if feeder == nil {
+		http.Error(w, "no active print to pause", http.StatusConflict)
+		return
+	}
+	feeder.Pause()
 	daemon.UpdateStatus(juggler.StatusPaused)
-	for daemon.job.Status != juggler.StatusPaused {
-		log.Infof("Waiting for %s status to be set", juggler.StatusPaused)
-		time.Sleep(1 * time.Second)
+	if !daemon.awaitStatus(juggler.StatusPaused) {
+		http.Error(w, "timed out waiting for job to pause", http.StatusServiceUnavailable)
 	}
 }
 
-// VersionHandler cancels job execution
+// VersionHandler reports the git commit this daemon was built from
 func (daemon *Daemon) VersionHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received version handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprint(w, gitCommit)
 }
