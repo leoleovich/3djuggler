@@ -146,17 +146,24 @@ func TestInfoHandlerFieldNames(t *testing.T) {
 }
 
 func TestVersionHandler(t *testing.T) {
-	orig := gitCommit
-	gitCommit = "abc123"
-	t.Cleanup(func() { gitCommit = orig })
-
 	d := newTestDaemon(juggler.StatusWaitingJob)
 	w := doRequest(d, "/version")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
-	if got := strings.TrimSpace(w.Body.String()); got != "abc123" {
-		t.Errorf("body = %q, want abc123", got)
+	if ct := w.Header().Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want text/plain; charset=utf-8", ct)
+	}
+	// The commit comes from the build, so the value depends on how the test
+	// binary was produced. It must always report something.
+	if got := strings.TrimSpace(w.Body.String()); got == "" {
+		t.Error("/version returned an empty body")
+	}
+}
+
+func TestVersionIsReported(t *testing.T) {
+	if got := version(); got == "" {
+		t.Error("version() returned an empty string")
 	}
 }
 

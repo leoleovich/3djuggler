@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/leoleovich/3djuggler/juggler"
@@ -16,9 +17,44 @@ var (
 	pollingInterval          = 5 * time.Second
 	defaultListen            = "[::1]:8888"
 	defaultSerial            = "/dev/ttyACM0"
-	// Set during compilation to export version via /version http handler
-	gitCommit = ""
 )
+
+// version reports the commit this binary was built from, which the Go
+// toolchain records automatically. Nothing needs to be passed at build time.
+func version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	return versionFromSettings(info.Settings)
+}
+
+// versionFromSettings renders the build settings the toolchain recorded. It is
+// separate from version so it can be tested: a test binary is a synthesised
+// main package and does not reliably carry VCS metadata of its own.
+func versionFromSettings(settings []debug.BuildSetting) string {
+	var revision string
+	var modified bool
+	for _, setting := range settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+
+	if revision == "" {
+		return "unknown"
+	}
+	if len(revision) > 12 {
+		revision = revision[:12]
+	}
+	if modified {
+		revision += "-dirty"
+	}
+	return revision
+}
 
 type InternEndpoint struct {
 	APIApp      string `json:"api_app"`
