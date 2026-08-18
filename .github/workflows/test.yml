@@ -4,8 +4,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: 1.18
+          go-version: 1.26
       - run: go build -v ./...
+      - run: go vet ./...
+      - run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - run: go tool cover -func=coverage.out
+      # The daemon is cross-compiled for the printer kiosks, so keep that
+      # target building on every change.
+      - run: GOOS=linux GOARCH=arm64 go build ./...
