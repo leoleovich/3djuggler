@@ -108,11 +108,9 @@ and nobody can hold a printer they are not standing next to.
 go build ./...
 ```
 
-To populate `/version`, stamp the commit at build time:
-
-```sh
-go build -ldflags "-X main.gitCommit=$(git rev-parse --short HEAD)" .
-```
+`/version` reports the commit the binary was built from. The Go toolchain
+records it automatically, so there is nothing to pass at build time. Building
+from a tree with uncommitted changes appends `-dirty`.
 
 Cross-compiling for the device is a normal Go cross-compile:
 

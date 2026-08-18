@@ -457,11 +457,11 @@ func (daemon *Daemon) PauseHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// VersionHandler reports the git commit this daemon was built from
+// VersionHandler reports the commit this daemon was built from
 func (daemon *Daemon) VersionHandler(w http.ResponseWriter, _ *http.Request) {
 	log.Infof("Received version handler request")
 	// Add headers to allow AJAX
 	juggler.SetHeaders(w)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprint(w, gitCommit)
+	fmt.Fprint(w, version())
 }
