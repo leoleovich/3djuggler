@@ -475,3 +475,151 @@ func TestSuccessfulDeleteAdvances(t *testing.T) {
 		t.Error("daemon did not advance to WaitingJob after a successful delete")
 	}
 }
+
+// internStub serves the /job/ get that the daemon polls, reporting whatever
+// status the test sets.
+func internStub(t *testing.T, status juggler.JobStatus, id int) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"Success": true,
+			"Content": &juggler.Job{ID: id, Status: status},
+		}); err != nil {
+			t.Errorf("encoding stub response: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestPausedJobSeesCancel covers a cancel arriving while the print is paused.
+//
+// A pause never times out, so it is the one state a job can sit in forever.
+// Intern hands a cancel over by setting the row to Cancelling and waiting for
+// the daemon to reap it, so a paused daemon that never reads the row back
+// leaves the job wedged and the printer unusable.
+func TestPausedJobSeesCancel(t *testing.T) {
+	tests := []struct {
+		name       string
+		internSays juggler.JobStatus
+		wantCancel bool
+	}{
+		{
+			name:       "cancel is picked up while paused",
+			internSays: juggler.StatusCancelling,
+			wantCancel: true,
+		},
+		{
+			name:       "a paused job with no cancel stays paused",
+			internSays: juggler.StatusPaused,
+			wantCancel: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const jobID = 42
+			srv := internStub(t, tt.internSays, jobID)
+
+			d := newTestDaemon(juggler.StatusPaused)
+			d.ie = testEndpoint(srv.URL)
+			d.mutateJob(func(j *juggler.Job) { j.ID = jobID })
+
+			d.pollPausedJob()
+
+			var got juggler.JobStatus
+			select {
+			case got = <-d.statusChan:
+			default:
+			}
+
+			if tt.wantCancel {
+				if got != juggler.StatusCancelling {
+					t.Errorf("requested status = %q, want %q", got, juggler.StatusCancelling)
+				}
+				return
+			}
+			if got == juggler.StatusCancelling {
+				t.Error("a paused job with no cancel on the row was cancelled")
+			}
+		})
+	}
+}
+
+// TestPausedJobSurvivesInternFailure covers intern being unreachable while a
+// print is paused. A failed fetch must never be read as a cancel: doing so
+// would destroy a live print on a network blip.
+func TestPausedJobSurvivesInternFailure(t *testing.T) {
+	speedUpRetries(t)
+
+	tests := []struct {
+		name string
+		uri  string
+		srv  func(t *testing.T) *httptest.Server
+	}{
+		{
+			name: "connection refused",
+			uri:  "http://127.0.0.1:1",
+		},
+		{
+			name: "intern returns 500",
+			srv: func(t *testing.T) *httptest.Server {
+				s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				t.Cleanup(s.Close)
+				return s
+			},
+		},
+		{
+			name: "intern returns garbage",
+			srv: func(t *testing.T) *httptest.Server {
+				s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if _, err := io.WriteString(w, "not json"); err != nil {
+						t.Errorf("writing stub response: %v", err)
+					}
+				}))
+				t.Cleanup(s.Close)
+				return s
+			},
+		},
+		{
+			name: "queue is empty",
+			srv: func(t *testing.T) *httptest.Server {
+				s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if err := json.NewEncoder(w).Encode(map[string]any{
+						"Success": true,
+						"Content": nil,
+					}); err != nil {
+						t.Errorf("encoding stub response: %v", err)
+					}
+				}))
+				t.Cleanup(s.Close)
+				return s
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uri := tt.uri
+			if tt.srv != nil {
+				uri = tt.srv(t).URL
+			}
+
+			d := newTestDaemon(juggler.StatusPaused)
+			d.ie = testEndpoint(uri)
+			d.mutateJob(func(j *juggler.Job) { j.ID = 42 })
+
+			if d.pollPausedJob() {
+				t.Error("a failed intern fetch was treated as a cancel")
+			}
+			select {
+			case got := <-d.statusChan:
+				t.Errorf("unexpected status change %q requested", got)
+			default:
+			}
+		})
+	}
+}

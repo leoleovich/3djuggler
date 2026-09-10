@@ -238,6 +238,10 @@ func (daemon *Daemon) Start() {
 				log.Warning("Printing. Feeder status is: ", feederStatus)
 			}
 		case juggler.StatusPaused:
+			job := daemon.jobSnapshot()
+			if daemon.pollPausedJob() {
+				break
+			}
 			feeder := daemon.currentFeeder()
 			if feeder == nil {
 				log.Error("Paused without a feeder, cancelling")
@@ -246,7 +250,7 @@ func (daemon *Daemon) Start() {
 			}
 			feederStatus := feeder.Status()
 			daemon.mutateJob(func(j *juggler.Job) { j.FeederStatus = feederStatus })
-			log.Infof("Job %d is currently paused", daemon.jobSnapshot().ID)
+			log.Infof("Job %d is currently paused", job.ID)
 			switch feederStatus {
 			case gcodefeeder.Printing:
 				daemon.UpdateStatus(juggler.StatusPrinting)
@@ -263,6 +267,25 @@ func (daemon *Daemon) Start() {
 
 		oldStatus = daemon.jobStatus()
 	}
+}
+
+// pollPausedJob reports whether the job was cancelled on intern while paused.
+//
+// A pause never times out, so this is the only state a job can sit in
+// indefinitely. Intern signals a cancel by setting the row to Cancelling and
+// waiting for the daemon to reap it, so a branch that never reads the row back
+// can never see one.
+func (daemon *Daemon) pollPausedJob() bool {
+	if err := daemon.ie.getJob(daemon.jobSnapshot().ID); err != nil {
+		log.Error("Can't get job status from intern: ", err)
+		return false
+	}
+	if daemon.ie.job.Status != juggler.StatusCancelling {
+		return false
+	}
+	log.Info("Cancelling the job")
+	daemon.UpdateStatus(juggler.StatusCancelling)
+	return true
 }
 
 func (daemon *Daemon) UpdateStatus(status juggler.JobStatus) {
